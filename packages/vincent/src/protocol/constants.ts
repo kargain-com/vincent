@@ -1,6 +1,6 @@
-import type { ClaimType, CycleRule, Provenance, VehicleAttribute } from './types.js';
+import type { AttestationKind, ClaimType, CycleRule, Provenance, VehicleAttribute } from './types.js';
 
-/** Allowed top-level keys for claims (§4.1). */
+/** Allowed top-level keys for claim fact cores (§4.1). */
 export const CLAIM_TOP_LEVEL_KEYS = new Set([
   'schemaVersion',
   'type',
@@ -10,11 +10,9 @@ export const CLAIM_TOP_LEVEL_KEYS = new Set([
   'provenance',
   'license',
   'supersedes',
-  'contributor',
-  'signature',
 ]);
 
-/** Required top-level keys for claims. */
+/** Required top-level keys for claim fact cores. */
 export const CLAIM_REQUIRED_KEYS = new Set([
   'schemaVersion',
   'type',
@@ -22,7 +20,23 @@ export const CLAIM_REQUIRED_KEYS = new Set([
   'value',
   'provenance',
   'license',
-  'contributor',
+]);
+
+/** Allowed top-level keys for attestations (§4.9). */
+export const ATTESTATION_TOP_LEVEL_KEYS = new Set([
+  'schemaVersion',
+  'claim',
+  'attester',
+  'kind',
+  'signature',
+]);
+
+/** Required top-level keys for attestations. */
+export const ATTESTATION_REQUIRED_KEYS = new Set([
+  'schemaVersion',
+  'claim',
+  'attester',
+  'kind',
   'signature',
 ]);
 
@@ -68,6 +82,8 @@ export const CLAIM_TYPES_V11: readonly ClaimType[] = [
   'vds-binding',
   'vds-pattern',
 ];
+
+export const ATTESTATION_KINDS: readonly AttestationKind[] = ['endorse'];
 
 export const PROVENANCE_VALUES: readonly Provenance[] = [
   'regulatory/us-vpic',

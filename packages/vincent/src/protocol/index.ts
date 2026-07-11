@@ -1,5 +1,8 @@
 export { canonicalize, CanonicalizeError } from './canonicalize.js';
 export {
+  ATTESTATION_KINDS,
+  ATTESTATION_REQUIRED_KEYS,
+  ATTESTATION_TOP_LEVEL_KEYS,
   CLAIM_REQUIRED_KEYS,
   CLAIM_TOP_LEVEL_KEYS,
   CLAIM_TYPES,
@@ -20,12 +23,16 @@ export {
   toChecksumAddress,
 } from './crypto.js';
 export { isValidChecksumAddress } from './eip55.js';
-export { claimHash, manifestHash, signingPayload } from './hash.js';
+export { attestationHash, claimHash, manifestHash, signingPayload } from './hash.js';
+export { parseAttestation } from './parse-attestation.js';
 export { parseMatchExpression, parseMatchSegment } from './parse-match.js';
 export { parseClaim } from './parse-claim.js';
 export { parseManifest } from './parse-manifest.js';
-export { signClaim, signManifest } from './sign.js';
+export { attest, signManifest } from './sign.js';
 export type {
+  Attestation,
+  AttestationKind,
+  AttestationVerifyResult,
   Claim,
   ClaimBaseV10,
   ClaimBaseV11,
@@ -44,7 +51,7 @@ export type {
   ParseResult,
   Provenance,
   ReviewPolicy,
-  UnsignedClaim,
+  UnsignedAttestation,
   UnsignedManifest,
   VehicleAttribute,
   VerifyResult,
@@ -63,4 +70,4 @@ export type {
   YearHintClaimKey,
   YearHintClaimValue,
 } from './types.js';
-export { verifyClaim, verifyManifest } from './verify.js';
+export { verifyAttestation, verifyManifest } from './verify.js';

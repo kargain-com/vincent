@@ -1,8 +1,8 @@
 # Vincent
 
-**Status:** pre-alpha, protocol spec v0.1 published
+**Status:** library `@kargain/vincent` 0.6.0; protocol spec v1.2 published (Merkle-authenticated per-WMI leaves)
 
-Vincent is an offline-first VIN decoder and an open protocol for community-curated VIN data. Claims are signed with Ethereum keys, stored content-addressed on Arweave, and anchored on EVM chains. The normative protocol specification is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+Vincent is an offline-first VIN decoder and an open protocol for community-curated VIN data. Claims are unsigned content-addressed fact cores; attestations and epoch manifests are signed with Ethereum keys. Data is stored content-addressed on Arweave and anchored on EVM chains. The normative protocol specification is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Contributing
 
@@ -11,7 +11,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code rules, and ho
 ## Protocol invariants
 
 1. **Canonical data lives off-chain.** No blockchain holds the authoritative dataset.
-2. **Every fact is a signed claim.** Each assertion has provable provenance and an immutable history.
+2. **Every fact is a content-addressed claim with provable provenance and an immutable history.** Attestation is separate from the fact core.
 3. **No irreplaceable components.** The protocol is fully permissionless and forkable.
 4. **MIT code, CC0 data.** Source code is MIT-licensed; published data is CC0-1.0 (see [DATA-LICENSE.md](DATA-LICENSE.md)).
 5. **Decoding is a pure client-side function.** No API sits in the critical path.
@@ -20,16 +20,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code rules, and ho
 
 | Package | Description |
 |---------|-------------|
-| [`@kargain/vincent`](packages/vincent) | Offline-first VIN library — deterministic core APIs today; protocol and decoder modules ship in later releases |
+| [`@kargain/vincent`](packages/vincent) | Published library — core (`.`), WMI (`./wmi`), protocol (`./protocol`), decoder (`./decoder`) |
+| [`@kargain/vincent-compiler`](compiler) | Private epoch compiler (workspace only) |
+| [`@kargain/vincent-pipeline`](pipeline) | Private WMI data generator (workspace only) |
+
+See the [package README](packages/vincent/README.md) for entry points, API tables, and usage examples.
 
 ## Roadmap
 
-| Phase | Focus |
-|-------|-------|
-| R | Repository skeleton and protocol specification |
-| V | Deterministic VIN layer and client-side decoder |
-| P | Signed claims, manifests, and epoch compiler |
-| A | Arweave storage and EVM anchoring |
+| Phase | Focus | Status |
+|-------|-------|--------|
+| R | Repository skeleton and protocol specification | Done |
+| V | Deterministic VIN layer and client-side decoder | Shipped (core, WMI, decoder) |
+| P | Attestations, manifests, and epoch compiler | Shipped (protocol module, private compiler) |
+| A | Arweave storage and EVM anchoring | Planned |
 
 ## License
 

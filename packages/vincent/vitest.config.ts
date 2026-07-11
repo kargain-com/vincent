@@ -14,8 +14,6 @@ export default defineConfig({
         'src/wmi-extended.generated.ts',
         // Vendored third-party inflate (tiny-inflate); validated via lookupWmi integration
         'src/inflate.vendored.ts',
-        // sqlite-wasm glue; decode logic covered via DatasetDb mocks
-        'src/decoder/sqlite-db.ts',
       ],
       thresholds: {
         statements: 100,

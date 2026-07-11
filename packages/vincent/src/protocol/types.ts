@@ -9,6 +9,9 @@ export type ClaimType =
 /** Wire schemaVersion minors for claims per PROTOCOL.md §4.2 and §4.5. */
 export type ClaimSchemaVersion = '1.0' | '1.1';
 
+/** Attestation kind per PROTOCOL.md §4.9. */
+export type AttestationKind = 'endorse';
+
 /** Provenance taxonomy per PROTOCOL.md §4.6. */
 export type Provenance =
   | 'regulatory/us-vpic'
@@ -44,13 +47,11 @@ export interface MatchExpression {
   vis?: MatchToken[];
 }
 
-/** Shared claim fields per PROTOCOL.md §4.1. */
+/** Shared claim fields per PROTOCOL.md §4.1 (fact core; no attestation). */
 export interface ClaimBaseV10 {
   schemaVersion: '1.0';
   provenance: Provenance;
   license: 'CC0-1.0';
-  contributor: string;
-  signature: string;
   evidence?: string[];
   supersedes?: string;
 }
@@ -59,8 +60,6 @@ export interface ClaimBaseV11 {
   schemaVersion: '1.1';
   provenance: Provenance;
   license: 'CC0-1.0';
-  contributor: string;
-  signature: string;
   evidence?: string[];
   supersedes?: string;
 }
@@ -71,7 +70,8 @@ export interface WmiClaimKey {
 
 export interface WmiClaimValue {
   manufacturer: string;
-  country: string;
+  country: string | null;
+  vehicleType: string | null;
   region: string;
 }
 
@@ -139,7 +139,7 @@ export interface YearHintClaim extends ClaimBaseV10 {
   value: YearHintClaimValue;
 }
 
-/** Signed claim union per PROTOCOL.md §4.2. */
+/** Claim fact-core union per PROTOCOL.md §4.2. */
 export type Claim =
   | WmiClaim
   | VdsSchemaClaim
@@ -147,9 +147,18 @@ export type Claim =
   | VdsPatternClaim
   | YearHintClaim;
 
-/** Unsigned claim input for signing (address filled by signer). */
-export type UnsignedClaim = Omit<Claim, 'signature' | 'contributor'> & {
-  contributor?: string;
+/** Attestation wire format per PROTOCOL.md §4.9. */
+export interface Attestation {
+  schemaVersion: '1.0';
+  claim: string;
+  attester: string;
+  kind: AttestationKind;
+  signature: string;
+}
+
+/** Unsigned attestation input for signing (address filled by signer). */
+export type UnsignedAttestation = Omit<Attestation, 'signature' | 'attester'> & {
+  attester?: string;
   signature?: never;
 };
 
@@ -165,7 +174,7 @@ export interface CompilerInfo {
 
 export interface DatasetInfo {
   jsonlSha256: string;
-  sqliteSha256: string;
+  merkleRoot: string;
   uris: string[];
 }
 
@@ -202,4 +211,9 @@ export type ParseResult<T> =
 /** Signature verification result. */
 export type VerifyResult =
   | { ok: true }
+  | { ok: false; reason: string };
+
+/** Attestation verification result. */
+export type AttestationVerifyResult =
+  | { ok: true; attester: string }
   | { ok: false; reason: string };

@@ -9,7 +9,6 @@ import {
   checkTopLevelKeys,
   fail,
   isPlainObject,
-  parseAddress,
   parseAttributeName,
   parseBindingWmi,
   parseClaimSchemaVersion,
@@ -21,9 +20,9 @@ import {
   parsePlainObject,
   parseProvenance,
   parseSha256Hash,
-  parseSignature,
   parseWmiCode,
   parseNonEmptyString,
+  parseNullableString,
   parseYearTo,
   rejectNullOptional,
 } from './parse-utils.js';
@@ -39,7 +38,7 @@ import type {
 } from './types.js';
 
 const WMI_KEY_KEYS = new Set(['wmi']);
-const WMI_VALUE_KEYS = new Set(['manufacturer', 'country', 'region']);
+const WMI_VALUE_KEYS = new Set(['manufacturer', 'country', 'vehicleType', 'region']);
 const VDS_SCHEMA_KEY_KEYS = new Set(['name']);
 const VDS_BINDING_KEY_KEYS = new Set(['wmi', 'yearFrom', 'yearTo', 'schema']);
 const VDS_PATTERN_KEY_KEYS = new Set(['schema', 'match']);
@@ -47,7 +46,26 @@ const VDS_PATTERN_MATCH_KEYS = new Set(['vds', 'vis']);
 const VDS_PATTERN_VALUE_KEYS = new Set(['attribute', 'code']);
 const YEAR_VALUE_KEYS = new Set(['cycleRule']);
 
-function parseWmiKey(value: unknown): ParseResult<{ wmi: string }> {
+function parseWmiClaimKey(value: unknown): ParseResult<{ wmi: string }> {
+  const obj = parsePlainObject(value, 'key');
+  if (!obj.ok) {
+    return obj;
+  }
+  const keys = checkObjectKeys(obj.value, WMI_KEY_KEYS, 'key');
+  if (!keys.ok) {
+    return keys;
+  }
+  if (!('wmi' in obj.value)) {
+    return fail('missing-key:wmi', 'Missing required key in key: wmi');
+  }
+  const wmi = parseBindingWmi(obj.value.wmi, 'wmi');
+  if (!wmi.ok) {
+    return wmi;
+  }
+  return { ok: true, value: { wmi: wmi.value } };
+}
+
+function parseYearHintKey(value: unknown): ParseResult<{ wmi: string }> {
   const obj = parsePlainObject(value, 'key');
   if (!obj.ok) {
     return obj;
@@ -68,7 +86,8 @@ function parseWmiKey(value: unknown): ParseResult<{ wmi: string }> {
 
 function parseWmiValue(value: unknown): ParseResult<{
   manufacturer: string;
-  country: string;
+  country: string | null;
+  vehicleType: string | null;
   region: string;
 }> {
   const obj = parsePlainObject(value, 'value');
@@ -88,9 +107,13 @@ function parseWmiValue(value: unknown): ParseResult<{
   if (!manufacturer.ok) {
     return manufacturer;
   }
-  const country = parseNonEmptyString(obj.value.country, 'country');
+  const country = parseNullableString(obj.value.country, 'country');
   if (!country.ok) {
     return country;
+  }
+  const vehicleType = parseNullableString(obj.value.vehicleType, 'vehicleType');
+  if (!vehicleType.ok) {
+    return vehicleType;
   }
   const region = parseNonEmptyString(obj.value.region, 'region');
   if (!region.ok) {
@@ -101,6 +124,7 @@ function parseWmiValue(value: unknown): ParseResult<{
     value: {
       manufacturer: manufacturer.value,
       country: country.value,
+      vehicleType: vehicleType.value,
       region: region.value,
     },
   };
@@ -265,10 +289,6 @@ function parseVdsPatternValue(value: unknown): ParseResult<{ attribute: string; 
   return { ok: true, value: { attribute: attribute.value, code: code.value } };
 }
 
-function parseYearHintKey(value: unknown): ParseResult<{ wmi: string }> {
-  return parseWmiKey(value);
-}
-
 function parseYearHintValue(value: unknown): ParseResult<{ cycleRule: string }> {
   const obj = parsePlainObject(value, 'value');
   if (!obj.ok) {
@@ -332,16 +352,6 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
     return provenance;
   }
 
-  const contributor = parseAddress(json.contributor, 'contributor');
-  if (!contributor.ok) {
-    return contributor;
-  }
-
-  const signature = parseSignature(json.signature);
-  if (!signature.ok) {
-    return signature;
-  }
-
   const evidence = parseEvidence(json.evidence);
   if (!evidence.ok) {
     return evidence;
@@ -360,8 +370,6 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
     schemaVersion: '1.0' as const,
     provenance: provenance.value,
     license: 'CC0-1.0' as const,
-    contributor: contributor.value,
-    signature: signature.value,
     ...(evidence.value !== undefined ? { evidence: evidence.value } : {}),
     ...(supersedes !== undefined ? { supersedes } : {}),
   };
@@ -370,15 +378,13 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
     schemaVersion: '1.1' as const,
     provenance: provenance.value,
     license: 'CC0-1.0' as const,
-    contributor: contributor.value,
-    signature: signature.value,
     ...(evidence.value !== undefined ? { evidence: evidence.value } : {}),
     ...(supersedes !== undefined ? { supersedes } : {}),
   };
 
   switch (claimType.value) {
     case 'wmi': {
-      const key = parseWmiKey(json.key);
+      const key = parseWmiClaimKey(json.key);
       if (!key.ok) {
         return key;
       }

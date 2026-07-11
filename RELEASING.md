@@ -47,6 +47,6 @@ This document is the founder runbook for publishing `@kargain/vincent` to npm. P
 
 ## Notes
 
-- **Decoder module:** `@kargain/vincent/decoder` declares `@sqlite.org/sqlite-wasm` as an optional peer dependency. Consumers install it separately; core and WMI entry points remain dependency-free.
+- **Decoder module:** `@kargain/vincent/decoder` is dependency-free. Consumers verify the epoch manifest, then pass the anchored `merkleRoot` and async `getLeaf(wmi)` provider. Core and WMI entry points remain dependency-free.
 - **npm provenance:** Deferred until CI publishing is implemented.
 - **Dry-run before first publish:** Use `pnpm --filter @kargain/vincent pack` to inspect tarball contents without publishing. Verify layered WMI entry points (`dist/index.js`, `dist/wmi-export.js`, generated data modules) are present.

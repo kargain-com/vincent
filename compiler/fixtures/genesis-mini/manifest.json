@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "epoch": 1,
+  "reviewPolicy": {
+    "minAccepts": 1,
+    "reviewers": [
+      "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3"
+    ]
+  },
+  "claims": [
+    "sha256:4d2073595632eb3ecef85abee7a4f36b0aa297794922efa9e8937ed42eccb946",
+    "sha256:583b877d298eeac383cb8968b790f29eb852c8f025c3269998c5b596d8f1c7a2",
+    "sha256:5cb0df00f35942d6af02e71f83d3efa7f90d38b566e53999f02c2d9f3fd12b80",
+    "sha256:7798a53da7897cf777ad7ceec83bdc06ba0dcc48567a0ee1cce4a2c44c03b1a5",
+    "sha256:8412fa413dd3ddcbfa525c24c204efb75928a666ae0c4207b53726debc428ca4",
+    "sha256:8903504174e7a5931228c3aca76fd49d5ab3fd8a0a1e0cc37fd3f124fbdc7a40",
+    "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
+    "sha256:98f3ca357a2c0081b4dd0d56346cd1b56dc53b609648ac442e22a8ffc2a6bad8",
+    "sha256:a34f5eeee79471b1c81f5ca3dd6c2ea8ede3b33917e4e9f2efd18edc1fb7691e",
+    "sha256:b2ec34b15b54af5a2d6efab1c0d83aeeabf33f497f1a91dc5d35bb8fafc16353",
+    "sha256:f86af77ca1272bee00cfa63363134020a39ce15995d8bbe8296ca7522b208cf5"
+  ],
+  "compiler": {
+    "name": "vincent-compiler",
+    "version": "1.0.0"
+  },
+  "dataset": {
+    "jsonlSha256": "sha256:a0f110eb9b4f2cbd318e5ab909ca1a692bf465c2d73ee516ee36d7bebc6a0eea",
+    "merkleRoot": "sha256:76f6692120d6f8316af6109aee98f8c4782ef6111f2d16959745459df0604f3c",
+    "uris": [
+      "ar://genesis-mini"
+    ]
+  },
+  "publisher": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+  "signature": "0x729651e02e57172eb2aad28dbb845dad555ed8cdbf482f67d827b80e44ffe6530d9e860fbd1bb4f83d4afded518b719ca28982719725ad4c11fb05ff60a34ebe1b"
+}

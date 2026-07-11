@@ -1,7 +1,7 @@
 import { recoverPersonalSignAddress } from './crypto.js';
 import { isValidChecksumAddress } from './eip55.js';
 import { signingPayload } from './hash.js';
-import type { Claim, Manifest, VerifyResult } from './types.js';
+import type { Attestation, AttestationVerifyResult, Manifest, VerifyResult } from './types.js';
 
 function verifySignedDocument(
   statedAddress: string,
@@ -23,9 +23,17 @@ function verifySignedDocument(
   return { ok: true };
 }
 
-/** Verify claim signature and contributor address (§5). */
-export function verifyClaim(claim: Claim): VerifyResult {
-  return verifySignedDocument(claim.contributor, claim.signature, signingPayload(claim));
+/** Verify attestation signature; recovered address must equal attester (§4.9). */
+export function verifyAttestation(attestation: Attestation): AttestationVerifyResult {
+  const verified = verifySignedDocument(
+    attestation.attester,
+    attestation.signature,
+    signingPayload(attestation),
+  );
+  if (!verified.ok) {
+    return verified;
+  }
+  return { ok: true, attester: attestation.attester };
 }
 
 /** Verify manifest signature and publisher address (§5). */

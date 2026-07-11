@@ -10,10 +10,24 @@ export function loadGenesisMiniClaims(): Claim[] {
   return JSON.parse(readFileSync(join(FIXTURE_DIR, 'claims.json'), 'utf8')) as Claim[];
 }
 
-export function loadGenesisMiniGolden(): { jsonlSha256: string } {
+export function loadGenesisMiniGolden(): {
+  jsonlSha256: string;
+  merkleRoot: string;
+  sampleLeafWmi: string;
+  sampleLeafHash: string;
+} {
   return JSON.parse(readFileSync(join(FIXTURE_DIR, 'golden.json'), 'utf8')) as {
     jsonlSha256: string;
+    merkleRoot: string;
+    sampleLeafWmi: string;
+    sampleLeafHash: string;
   };
+}
+
+export function loadGenesisMiniManifest(): import('@kargain/vincent/protocol').Manifest {
+  return JSON.parse(
+    readFileSync(join(FIXTURE_DIR, 'manifest.json'), 'utf8'),
+  ) as import('@kargain/vincent/protocol').Manifest;
 }
 
 export const TEST_PRIVATE_KEY =

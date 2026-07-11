@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for your interest in Vincent. This repository accepts two kinds of contribution: code (pull requests here) and data (signed claims per the protocol). Only code contributions have tooling today.
+Thank you for your interest in Vincent. This repository accepts two kinds of contribution: code (pull requests here) and data (unsigned claim fact cores per the protocol, optionally endorsed via attestations). Only code contributions have tooling today.
 
 ## Development setup
 
@@ -21,7 +21,8 @@ All four commands must pass before you open a pull request. CI runs the same che
 
 | Path | Purpose |
 |------|---------|
-| `packages/vincent` | `@kargain/vincent` — published library (core module today) |
+| `packages/vincent` | `@kargain/vincent` — published library (`.`, `./wmi`, `./protocol`, `./decoder`) |
+| `compiler/` | `@kargain/vincent-compiler` — private epoch compiler (workspace only) |
 | `pipeline/` | Private WMI generator (`@kargain/vincent-pipeline`) |
 | `docs/` | Normative protocol specification and governance documents |
 | `contracts/` (planned, phase A) | On-chain manifest registry |
@@ -49,7 +50,7 @@ Report security issues privately — see [SECURITY.md](SECURITY.md). Do not open
 
 ## Data contributions
 
-Vincent data lives outside this repository. A data contribution is a signed claim document published to content-addressed storage and optionally reviewed via EAS attestations. Claims are not committed as files in this repo.
+Vincent data lives outside this repository. A data contribution is an unsigned claim fact core published to content-addressed storage, optionally endorsed via EAS attestations, and compiled into signed epoch manifests. Claims are not committed as files in this repo.
 
 Contribution tooling (signing, upload, review workflows) ships in phase C. Until then, read the protocol specification to understand claim format, provenance, evidence rules, signatures, and review:
 

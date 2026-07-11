@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import golden from './fixtures/golden.json';
 import { parseManifest } from '../../src/protocol/parse-manifest.js';
 
-const validManifest = golden.signed.manifest;
+const validManifest = golden.manifest;
 
 describe('parseManifest', () => {
   it('accepts valid genesis manifest', () => {
@@ -108,6 +108,30 @@ describe('parseManifest', () => {
       parseManifest({
         ...validManifest,
         dataset: { ...validManifest.dataset, extra: true },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects disallowed extra dataset keys', () => {
+    const legacyIndexKey = ['index', 'Sha256'].join('');
+    const legacyDbKey = ['sql', 'ite', 'Sha256'].join('');
+    expect(
+      parseManifest({
+        ...validManifest,
+        dataset: {
+          jsonlSha256: validManifest.dataset.jsonlSha256,
+          [legacyIndexKey]: validManifest.dataset.merkleRoot,
+          uris: validManifest.dataset.uris,
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseManifest({
+        ...validManifest,
+        dataset: {
+          ...validManifest.dataset,
+          [legacyDbKey]: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        },
       }).ok,
     ).toBe(false);
   });

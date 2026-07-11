@@ -1,6 +1,10 @@
 # @kargain/vincent
 
-Pure, deterministic functions over the VIN string — normalization, validation, check digit, model year, and coarse region. WMI lookup is a separate entry point with layered loading. The core and WMI entry points have zero runtime dependencies; the protocol entry adds `@noble/hashes` and `@noble/curves` for EIP-191 signing. Attribute decoding from compiled epoch datasets ships in `@kargain/vincent/decoder` with an optional `@sqlite.org/sqlite-wasm` peer dependency.
+Pure, deterministic functions over the VIN string — normalization, validation, check digit, model year, and coarse region. WMI lookup is a separate entry point with layered loading. The core, WMI, and decoder entry points have **zero runtime dependencies**; the protocol entry adds `@noble/hashes` and `@noble/curves` for EIP-191 signing. Attribute decoding uses a Merkle-authenticated epoch dataset (32-byte root + per-WMI leaves); fetching leaves is the caller's concern.
+
+```bash
+npm install @kargain/vincent
+```
 
 ## Entry points
 
@@ -9,7 +13,7 @@ Pure, deterministic functions over the VIN string — normalization, validation,
 | `@kargain/vincent` | ~3 KiB | Core deterministic APIs only — no WMI data |
 | `@kargain/vincent/wmi` | ~40 KiB core + ~132 KiB extended on demand | `lookupWmi`, `WmiInfo` |
 | `@kargain/vincent/protocol` | ~3 KiB entry + noble deps | JCS canonicalization, hashing, signing, parsing |
-| `@kargain/vincent/decoder` | entry + optional sqlite-wasm | `createDecoder`, `matchExpression`, `DecodeResult` |
+| `@kargain/vincent/decoder` | dependency-free | `createDecoder`, `decoder.origin`, `decoder.decode`, `matchExpression` |
 
 Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) loads via dynamic `import()` only when needed. Mass-manufacturer 3-character WMIs load lazily on the first `lookupWmi` call.
 
@@ -37,7 +41,7 @@ Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) 
 
 ### `@kargain/vincent/protocol`
 
-Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.1 claim parsing, JCS canonicalization, and EIP-191 signing. Runtime VIN matching and decoder resolution ship in `@kargain/vincent/decoder`.
+Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.2 claim fact cores, attestations, JCS canonicalization, and EIP-191 signing. Runtime VIN matching and decoder resolution ship in `@kargain/vincent/decoder`.
 
 **Claim types** (`schemaVersion` per type):
 
@@ -52,31 +56,27 @@ Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.1 claim parsing, JCS canonic
 | Export | Description |
 |--------|-------------|
 | `canonicalize(doc)` | RFC 8785 JCS canonical JSON string |
-| `claimHash(claim)` / `manifestHash(manifest)` | `sha256:<hex>` content id including signature |
-| `signingPayload(doc)` | Canonical form excluding `signature` |
-| `signClaim(claim, privateKey)` / `signManifest(manifest, privateKey)` | EIP-191 sign; sets contributor/publisher |
-| `verifyClaim(claim)` / `verifyManifest(manifest)` | Signature + EIP-55 verification |
-| `parseClaim(json)` / `parseManifest(json)` | Fail-closed wire-format parsing |
+| `claimHash(claim)` | `sha256:<hex>` content id of the claim fact core |
+| `manifestHash(manifest)` / `attestationHash(attestation)` | `sha256:<hex>` including `signature` |
+| `signingPayload(doc)` | Canonical form excluding `signature` (manifests, attestations) |
+| `attest(claimId, privateKey)` / `signManifest(manifest, privateKey)` | EIP-191 sign attestation or manifest |
+| `verifyAttestation(att)` / `verifyManifest(manifest)` | Signature + EIP-55 verification |
+| `parseClaim(json)` / `parseAttestation(json)` / `parseManifest(json)` | Fail-closed wire-format parsing |
 | `parseMatchSegment(segment)` | Match grammar validation (§4.3); no VIN matching |
 | `parseMatchExpression(match)` | Parse composite vds/vis match object |
-| Types | `Claim`, `Manifest`, `MatchToken`, `VdsSchemaClaim`, `VdsBindingClaim`, `VdsPatternClaim`, … |
+| Types | `Claim`, `Attestation`, `Manifest`, `MatchToken`, … |
 
 ### `@kargain/vincent/decoder`
 
-Implements [PROTOCOL.md](../../docs/PROTOCOL.md) §4.4 decoder resolution over compiler-produced SQLite epoch datasets. Install the optional peer dependency before use:
-
-```bash
-npm install @sqlite.org/sqlite-wasm
-```
-
-Datasets are pre-verified `Uint8Array` bytes from a compiled epoch (JSONL + derived SQLite cache). Fetching from Arweave and verifying `jsonl_sha256` is a separate loader concern (phase A).
+Implements [PROTOCOL.md](../../docs/PROTOCOL.md) §4.4 decoder resolution over a Merkle-authenticated epoch dataset. The client holds a 32-byte `merkleRoot` plus the bundled `./wmi` table. The library does not fetch network data or verify manifest signatures — pass an already-verified root and an async `getLeaf(wmi)` provider (untrusted; every leaf is verified against the root).
 
 | Export | Description |
 |--------|-------------|
-| `createDecoder(dataset)` | `Promise<Decoder>` — opens SQLite WASM engine and deserializes epoch bytes |
-| `decoder.decode(vin, options?)` | Sync decode: WMI from dataset, year-scoped bindings, pattern match, attribute merge |
-| `matchExpression(match, vin)` | Pure §4.3 matcher (vds@4, vis@10); unit-testable without SQLite |
-| Types | `DecodeResult`, `DecodedAttribute`, `AttributeCandidate`, `Decoder`, … |
+| `createDecoder({ merkleRoot, getLeaf })` | Sync factory returning a `Decoder` |
+| `decoder.origin(vin)` | Async WMI metadata from bundled `./wmi` + `vinRegion` (no leaf fetch) |
+| `decoder.decode(vin, options?)` | Async full decode: fetch leaf + proof, verify Merkle inclusion, match patterns |
+| `matchExpression(match, vin)` | Pure §4.3 matcher (vds@4, vis@10) |
+| Types | `DecodeResult`, `GetLeaf`, `MerkleProof`, `OriginResult`, … |
 
 Conflicts are never guessed: ambiguous model years and overlapping pattern values surface as `ambiguous` / `yearDependent` with candidate lists.
 
@@ -99,24 +99,23 @@ const wmi = await lookupWmi('1HG');
 // { wmi: '1HG', manufacturer: 'AMERICAN HONDA MOTOR CO., INC.', ... }
 ```
 
-### Protocol sign / verify
+### Protocol attest / verify
 
 ```ts
-import { signClaim, verifyClaim, parseClaim } from '@kargain/vincent/protocol';
+import { attest, verifyAttestation, claimHash, parseClaim } from '@kargain/vincent/protocol';
 
-const signed = signClaim(
-  {
-    schemaVersion: '1.0',
-    type: 'wmi',
-    key: { wmi: 'VF3' },
-    value: { manufacturer: 'Peugeot', country: 'FR', region: 'EU' },
-    provenance: 'regulatory/us-vpic',
-    license: 'CC0-1.0',
-  },
-  privateKeyHex,
-);
+const claim = {
+  schemaVersion: '1.0',
+  type: 'wmi',
+  key: { wmi: 'VF3' },
+  value: { manufacturer: 'Peugeot', country: 'FR', vehicleType: 'Passenger Car', region: 'EU' },
+  provenance: 'regulatory/us-vpic',
+  license: 'CC0-1.0',
+};
 
-const check = verifyClaim(signed);
+const id = claimHash(claim);
+const att = attest(id, privateKeyHex);
+const check = verifyAttestation(att);
 // check.ok === true
 
 const parsed = parseClaim(JSON.parse(jsonText));
@@ -128,10 +127,16 @@ const parsed = parseClaim(JSON.parse(jsonText));
 ```ts
 import { createDecoder } from '@kargain/vincent/decoder';
 
-// `epochBytes` — pre-verified SQLite cache from a compiled epoch manifest
-const decoder = await createDecoder(epochBytes);
-const result = decoder.decode('1FA12BBABG1234567');
-// result.wmi?.manufacturer === 'Ford'
+// `merkleRoot` — from verified epoch manifest; `getLeaf` — caller-provided fetch (Arweave, memory, etc.)
+const decoder = createDecoder({
+  merkleRoot: manifest.dataset.merkleRoot,
+  getLeaf: async (wmi) => fetchLeafAndProof(wmi),
+});
+
+const origin = await decoder.origin('1FA12BBABG1234567');
+// origin.wmi from bundled ./wmi + vinRegion (no network)
+
+const result = await decoder.decode('1FA12BBABG1234567');
 // result.attributes — model, bodyType, fuelType, plant, …
 // result.year — resolved or ambiguous with candidates
 ```

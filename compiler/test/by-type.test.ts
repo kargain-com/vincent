@@ -4,9 +4,9 @@ import { compile } from '../src/compile.js';
 import { loadGenesisMiniClaims } from './helpers.js';
 
 describe('byType counts', () => {
-  it('reports survivor counts per claim type after supersession', async () => {
+  it('reports survivor counts per claim type after supersession', () => {
     const claims = loadGenesisMiniClaims();
-    const result = await compile(claims, {});
+    const result = compile(claims, {});
 
     expect(result.ok).toBe(true);
     if (!result.ok) {

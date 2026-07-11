@@ -1,5 +1,7 @@
 import type { ClaimType } from '@kargain/vincent/protocol';
 
+import type { MerkleProof } from './merkle.js';
+
 /** Compile-time error (fail-closed, no exceptions). */
 export interface CompileError {
   code: string;
@@ -17,16 +19,39 @@ export interface CompilePolicy {
   anchorOrder?: readonly string[];
   /** Explicit anchor ranks; when set for a hash, overrides index-derived rank. */
   anchorRank?: Readonly<Record<string, number>>;
+  /** Optional progress callback for long compiles. */
+  progress?: (message: string) => void;
+  /** Override leaf size cap (bytes); default LEAF_CAP_BYTES. Tests only. */
+  leafCapBytes?: number;
+}
+
+export interface CompileStageTimingMs {
+  prepare: number;
+  anchor: number;
+  supersession: number;
+  conflict: number;
+  sort: number;
+  jsonl: number;
+  leaves: number;
+  merkle: number;
+}
+
+/** Per-WMI leaf artifact with Merkle inclusion proof. */
+export interface EpochLeaf {
+  leaf: string;
+  leafHash: string;
+  proof: MerkleProof;
 }
 
 /** Compiled epoch artifacts. */
 export interface EpochBuild {
   jsonl: string;
   jsonlSha256: string;
-  sqlite: Uint8Array;
-  sqliteSha256: string;
+  merkleRoot: string;
+  leaves: Map<string, EpochLeaf>;
   claimCount: number;
   byType: Record<ClaimType, number>;
+  stageTimingMs: CompileStageTimingMs;
 }
 
 /** verifyEpoch result. */

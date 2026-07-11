@@ -21,7 +21,7 @@ import type { CompilerInfo, DatasetInfo, Manifest, ParseResult, ReviewPolicy } f
 
 const REVIEW_POLICY_KEYS = new Set(['minAccepts', 'reviewers']);
 const COMPILER_KEYS = new Set(['name', 'version']);
-const DATASET_KEYS = new Set(['jsonlSha256', 'sqliteSha256', 'uris']);
+const DATASET_KEYS = new Set(['jsonlSha256', 'merkleRoot', 'uris']);
 
 function parseReviewPolicy(value: unknown): ParseResult<ReviewPolicy> {
   const obj = parsePlainObject(value, 'reviewPolicy');
@@ -97,9 +97,9 @@ function parseDataset(value: unknown): ParseResult<DatasetInfo> {
   if (!jsonlSha256.ok) {
     return jsonlSha256;
   }
-  const sqliteSha256 = parseNonEmptyString(obj.value.sqliteSha256, 'dataset.sqliteSha256');
-  if (!sqliteSha256.ok) {
-    return sqliteSha256;
+  const merkleRoot = parseSha256Hash(obj.value.merkleRoot, 'dataset.merkleRoot');
+  if (!merkleRoot.ok) {
+    return merkleRoot;
   }
   if (!Array.isArray(obj.value.uris) || obj.value.uris.length === 0) {
     return fail('invalid-dataset', 'dataset.uris must contain at least one URI');
@@ -116,7 +116,7 @@ function parseDataset(value: unknown): ParseResult<DatasetInfo> {
     ok: true,
     value: {
       jsonlSha256: jsonlSha256.value,
-      sqliteSha256: sqliteSha256.value,
+      merkleRoot: merkleRoot.value,
       uris,
     },
   };

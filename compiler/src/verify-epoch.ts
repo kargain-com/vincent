@@ -5,12 +5,12 @@ import { compile } from './compile.js';
 import type { VerifyEpochResult } from './types.js';
 
 /**
- * Rebuild JSONL from manifest claims and verify byte-reproducibility (§6 rebuilt = true).
+ * Rebuild JSONL and Merkle root from manifest claims and verify byte-reproducibility (§6 rebuilt = true).
  */
-export async function verifyEpoch(
+export function verifyEpoch(
   manifest: Manifest,
   claims: Claim[],
-): Promise<VerifyEpochResult> {
+): VerifyEpochResult {
   const signature = verifyManifest(manifest);
   if (!signature.ok) {
     return { ok: false, reason: signature.reason };
@@ -30,7 +30,7 @@ export async function verifyEpoch(
     selected.push(claim);
   }
 
-  const built = await compile(selected, { anchorOrder: manifest.claims });
+  const built = compile(selected, { anchorOrder: manifest.claims });
   if (!built.ok) {
     return { ok: false, reason: built.error.message };
   }
@@ -39,6 +39,13 @@ export async function verifyEpoch(
     return {
       ok: false,
       reason: `jsonlSha256 mismatch: expected ${manifest.dataset.jsonlSha256}, got ${built.value.jsonlSha256}`,
+    };
+  }
+
+  if (built.value.merkleRoot !== manifest.dataset.merkleRoot) {
+    return {
+      ok: false,
+      reason: `merkleRoot mismatch: expected ${manifest.dataset.merkleRoot}, got ${built.value.merkleRoot}`,
     };
   }
 

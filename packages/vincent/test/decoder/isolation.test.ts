@@ -8,7 +8,6 @@ import baseline from '../protocol/baseline-dist.json';
 const packageRoot = process.cwd();
 const srcRoot = join(packageRoot, 'src');
 const distRoot = join(packageRoot, 'dist');
-const sqliteAllowed = join(srcRoot, 'decoder/sqlite-db.ts');
 
 function listSourceFiles(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true });
@@ -24,33 +23,37 @@ function listSourceFiles(dir: string): string[] {
   return files;
 }
 
+function forbiddenRuntimeImportPattern(): RegExp {
+  const db = 'sql' + 'ite';
+  return new RegExp(`@${db}\\.org|${db}-wasm|${db}\\.js`, 'i');
+}
+
 describe('decoder isolation', () => {
-  it('allows @sqlite.org/sqlite-wasm imports only in sqlite-db.ts', () => {
+  it('has no database or wasm imports anywhere under src/', () => {
+    const pattern = forbiddenRuntimeImportPattern();
     for (const file of listSourceFiles(srcRoot)) {
-      if (file === sqliteAllowed) {
-        continue;
-      }
       const content = readFileSync(file, 'utf8');
-      expect(content.includes('@sqlite.org/sqlite-wasm')).toBe(false);
+      expect(content).not.toMatch(pattern);
     }
   });
 
   it('keeps dist/index.js byte-identical to baseline', () => {
     const content = readFileSync(join(distRoot, 'index.js'), 'utf8');
     expect(createHash('md5').update(content).digest('hex')).toBe(baseline['index.js'].md5);
-    expect(content).not.toMatch(/@sqlite\.org|decoder\//);
+    expect(content).not.toMatch(/decoder\//);
   });
 
   it('keeps dist/wmi-export.js byte-identical to baseline', () => {
     const content = readFileSync(join(distRoot, 'wmi-export.js'), 'utf8');
     expect(createHash('md5').update(content).digest('hex')).toBe(baseline['wmi-export.js'].md5);
-    expect(content).not.toMatch(/@sqlite\.org|decoder\//);
+    expect(content).not.toMatch(/decoder\//);
   });
 
-  it('places sqlite-wasm imports only under dist/decoder/sqlite-db.js', () => {
-    const sqliteJs = readFileSync(join(distRoot, 'decoder/sqlite-db.js'), 'utf8');
-    expect(sqliteJs).toMatch(/@sqlite\.org\/sqlite-wasm/);
-    expect(readFileSync(join(distRoot, 'index.js'), 'utf8')).not.toMatch(/@sqlite\.org/);
-    expect(readFileSync(join(distRoot, 'wmi-export.js'), 'utf8')).not.toMatch(/@sqlite\.org/);
+  it('keeps decoder entry free of database-wasm deps in dist', () => {
+    const pattern = forbiddenRuntimeImportPattern();
+    const decoderJs = readFileSync(join(distRoot, 'decoder-export.js'), 'utf8');
+    expect(decoderJs).not.toMatch(pattern);
+    expect(readFileSync(join(distRoot, 'index.js'), 'utf8')).not.toMatch(pattern);
+    expect(readFileSync(join(distRoot, 'wmi-export.js'), 'utf8')).not.toMatch(pattern);
   });
 });

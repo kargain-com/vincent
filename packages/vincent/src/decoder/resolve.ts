@@ -1,7 +1,7 @@
 import { decodeModelYear } from '../model-year.js';
 import { validateVin } from '../validation.js';
-import type { BindingRow, DatasetDb, WmiRow } from './dataset-db.js';
 import { matchExpression } from './match.js';
+import type { DecodeLeaf, LeafBinding } from './leaf-types.js';
 import type {
   AttributeCandidate,
   DecodeOptions,
@@ -14,8 +14,7 @@ import type {
 export interface PatternHit {
   attribute: string;
   code: string;
-  schemaHash: string;
-  claimHash: string;
+  schemaRef: string;
 }
 
 interface TaggedHit {
@@ -25,8 +24,6 @@ interface TaggedHit {
 
 /**
  * Resolve WMI lookup key: 3-char, or 6-char when position 3 is "9" (§4.4).
- * Future: converge with bundled `./wmi` lookup for pre-decode hints; decoder
- * remains self-contained over epoch data.
  */
 export function resolveWmiKey(vin: string): string {
   if (vin.length >= 6 && vin.charAt(2) === '9') {
@@ -35,17 +32,11 @@ export function resolveWmiKey(vin: string): string {
   return vin.slice(0, 3);
 }
 
-function toDecodedWmi(row: WmiRow): DecodedWmi {
-  return {
-    wmi: row.wmi,
-    manufacturer: row.manufacturer,
-    country: row.country,
-    region: row.region,
-    sourceClaimHash: row.claimHash,
-  };
+function toDecodedWmi(wmi: DecodedWmi): DecodedWmi {
+  return wmi;
 }
 
-function bindingContainsYear(binding: BindingRow, year: number): boolean {
+function bindingContainsYear(binding: LeafBinding, year: number): boolean {
   if (year < binding.yearFrom) {
     return false;
   }
@@ -55,33 +46,40 @@ function bindingContainsYear(binding: BindingRow, year: number): boolean {
   return true;
 }
 
+function getBindingsForYear(leaf: DecodeLeaf, year: number): LeafBinding[] {
+  return leaf.bindings.filter((binding) => bindingContainsYear(binding, year));
+}
+
 function collectHitsForBindings(
-  db: DatasetDb,
+  leaf: DecodeLeaf,
   vin: string,
-  bindings: readonly BindingRow[],
+  bindings: readonly LeafBinding[],
 ): PatternHit[] {
   const hits: PatternHit[] = [];
   const seenSchemas = new Set<string>();
 
   for (const binding of bindings) {
-    if (seenSchemas.has(binding.schemaHash)) {
+    if (seenSchemas.has(binding.schemaRef)) {
       continue;
     }
-    seenSchemas.add(binding.schemaHash);
+    seenSchemas.add(binding.schemaRef);
 
-    const patterns = db.getPatterns(binding.schemaHash);
-    for (const pattern of patterns) {
+    const schema = leaf.schemas[binding.schemaRef];
+    if (schema === undefined) {
+      continue;
+    }
+
+    for (const pattern of schema.patterns) {
       if (
         matchExpression(
-          { vds: pattern.matchVds, vis: pattern.matchVis ?? undefined },
+          { vds: pattern.match.vds, vis: pattern.match.vis ?? undefined },
           vin,
         )
       ) {
         hits.push({
           attribute: pattern.attribute,
           code: pattern.code,
-          schemaHash: pattern.schemaHash,
-          claimHash: pattern.claimHash,
+          schemaRef: binding.schemaRef,
         });
       }
     }
@@ -90,16 +88,15 @@ function collectHitsForBindings(
   return hits;
 }
 
-function collectPatternHits(db: DatasetDb, wmi: string, vin: string, year: number): PatternHit[] {
-  const bindings = db.getBindings(wmi, year);
-  return collectHitsForBindings(db, vin, bindings);
+function collectPatternHits(leaf: DecodeLeaf, vin: string, year: number): PatternHit[] {
+  const bindings = getBindingsForYear(leaf, year);
+  return collectHitsForBindings(leaf, vin, bindings);
 }
 
 function toCandidate(hit: PatternHit): AttributeCandidate {
   return {
     value: hit.code,
-    schema: hit.schemaHash,
-    sourceClaimHash: hit.claimHash,
+    schema: hit.schemaRef,
   };
 }
 
@@ -108,7 +105,7 @@ function distinctCandidates(hits: readonly PatternHit[]): AttributeCandidate[] {
   const candidates: AttributeCandidate[] = [];
 
   for (const hit of hits) {
-    const key = `${hit.code}\0${hit.schemaHash}\0${hit.claimHash}`;
+    const key = `${hit.code}\0${hit.schemaRef}`;
     if (seen.has(key)) {
       continue;
     }
@@ -143,8 +140,7 @@ function mergeHits(hits: readonly PatternHit[]): DecodedAttribute[] {
         attribute,
         value: hit.code,
         ambiguous: false,
-        schema: hit.schemaHash,
-        sourceClaimHash: hit.claimHash,
+        schema: hit.schemaRef,
       });
       continue;
     }
@@ -155,7 +151,6 @@ function mergeHits(hits: readonly PatternHit[]): DecodedAttribute[] {
       ambiguous: true,
       candidates,
       schema: null,
-      sourceClaimHash: null,
     });
   }
 
@@ -187,8 +182,7 @@ function mergeTaggedHits(tagged: readonly TaggedHit[], candidateYears: readonly 
         attribute,
         value: hit.code,
         ambiguous: false,
-        schema: hit.schemaHash,
-        sourceClaimHash: hit.claimHash,
+        schema: hit.schemaRef,
       });
       continue;
     }
@@ -211,7 +205,6 @@ function mergeTaggedHits(tagged: readonly TaggedHit[], candidateYears: readonly 
         ambiguous: true,
         candidates,
         schema: null,
-        sourceClaimHash: null,
       });
       continue;
     }
@@ -223,7 +216,6 @@ function mergeTaggedHits(tagged: readonly TaggedHit[], candidateYears: readonly 
       yearDependent: true,
       candidates,
       schema: null,
-      sourceClaimHash: null,
     });
   }
 
@@ -232,15 +224,14 @@ function mergeTaggedHits(tagged: readonly TaggedHit[], candidateYears: readonly 
 }
 
 function collectTaggedHits(
-  db: DatasetDb,
-  wmi: string,
+  leaf: DecodeLeaf,
   vin: string,
   candidateYears: readonly number[],
 ): TaggedHit[] {
   const tagged: TaggedHit[] = [];
 
   for (const year of candidateYears) {
-    const hits = collectPatternHits(db, wmi, vin, year);
+    const hits = collectPatternHits(leaf, vin, year);
     for (const hit of hits) {
       tagged.push({ hit, year });
     }
@@ -249,8 +240,13 @@ function collectTaggedHits(
   return tagged;
 }
 
-/** Decode a VIN against an open epoch dataset (pure over db reads). */
-export function decodeFromDataset(db: DatasetDb, vin: string, options?: DecodeOptions): DecodeResult {
+/** Decode a VIN against a parsed decode leaf (pure). */
+export function decodeFromLeaf(
+  leaf: DecodeLeaf,
+  vin: string,
+  wmi: DecodedWmi,
+  options?: DecodeOptions,
+): DecodeResult {
   const validation = validateVin(vin);
   const modelYear = decodeModelYear(validation.normalized);
   const resolvedYear = options?.year ?? modelYear.best ?? null;
@@ -264,34 +260,26 @@ export function decodeFromDataset(db: DatasetDb, vin: string, options?: DecodeOp
       ambiguous: yearAmbiguous,
       candidates: modelYear.candidates,
     },
-    wmi: null,
+    wmi: toDecodedWmi(wmi),
     attributes: [],
     errors: validation.errors,
     warnings: validation.warnings,
   };
 
-  if (!validation.ok || validation.normalized.length < 3) {
+  if (!validation.ok) {
     return base;
   }
-
-  const wmiKey = resolveWmiKey(validation.normalized);
-  const wmiRow = db.getWmi(wmiKey);
-  if (wmiRow === null) {
-    return base;
-  }
-
-  base.wmi = toDecodedWmi(wmiRow);
 
   if (yearAmbiguous) {
     if (modelYear.candidates.length === 0) {
       return base;
     }
-    const tagged = collectTaggedHits(db, wmiKey, validation.normalized, modelYear.candidates);
+    const tagged = collectTaggedHits(leaf, validation.normalized, modelYear.candidates);
     base.attributes = mergeTaggedHits(tagged, modelYear.candidates);
     return base;
   }
 
-  const hits = collectPatternHits(db, wmiKey, validation.normalized, resolvedYear!);
+  const hits = collectPatternHits(leaf, validation.normalized, resolvedYear!);
   base.attributes = mergeHits(hits);
   return base;
 }

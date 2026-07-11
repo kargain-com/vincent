@@ -1,5 +1,17 @@
 # @kargain/vincent
 
+## 0.6.0
+
+### Minor Changes
+
+- Protocol v1.2 + Merkle-authenticated dataset (0.6.0):
+
+  - **Claims:** content-addressed fact cores (`claimHash`); no inline `signature`/`contributor`. Individual endorsement via `Attestation` (`attest`/`verifyAttestation`).
+  - **WMI:** required-nullable `country`/`vehicleType`; 3- or 6-character WMI keys.
+  - **Dataset:** replace flat WMI index + two-level shards with self-contained per-WMI leaves and an RFC 6962–style Merkle tree. Manifest commits `jsonlSha256` + `merkleRoot` (rejects legacy `indexSha256` / `sqliteSha256`).
+  - **Decoder:** `createDecoder({ merkleRoot, getLeaf(wmi) })` with async `origin(vin)` (bundled `./wmi` + `vinRegion`) and async `decode(vin)`. Fetches one leaf + proof per VIN; verifies against the anchored root. Zero peer dependencies; no SQLite/WASM.
+  - **Breaking:** removed flat `DecoderIndex` / `GetShard` API; `origin` is async; `DecodedWmi.region` uses `VinRegion` slugs (e.g. `north-america`).
+
 ## 0.5.0
 
 ### Minor Changes

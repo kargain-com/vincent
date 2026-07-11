@@ -1,6 +1,6 @@
 # Vincent protocol
 
-**Version:** 1.1
+**Version:** 1.2
 **Status:** normative for all Vincent implementations once merged; breaking changes require a new `schemaVersion`.
 
 Vincent is an open protocol for community-curated vehicle identification (VIN) data. It defines how facts about VIN encoding are contributed, reviewed, compiled into datasets, and anchored — so that any client can decode VINs offline and verify every byte it relies on.
@@ -9,28 +9,31 @@ Vincent is an open protocol for community-curated vehicle identification (VIN) d
 
 These hold for every version of the protocol. A change that violates one of them is not an upgrade; it is a different protocol.
 
-1. **Canonical data lives in no chain.** Claims, manifests, and datasets are self-contained signed documents in content-addressed storage. Blockchains act only as interchangeable notaries (timestamping, ordering, discovery).
-2. **Every fact is a signed claim with provable provenance and an immutable history.** Nothing is ever edited or deleted; corrections are new claims that supersede old ones at compile time.
+1. **Canonical data lives in no chain.** Claims and the canonical JSONL dataset are unsigned content-addressed artifacts; manifests and attestations are signed. Blockchains act only as interchangeable notaries (timestamping, ordering, discovery).
+2. **Every fact is a content-addressed claim with provable provenance and an immutable history.** Attestation is separate from the fact core. Nothing is ever edited or deleted; corrections are new claims that supersede old ones at compile time.
 3. **No irreplaceable components.** Any storage gateway, chain, publisher, or maintainer can disappear or be replaced without loss. A full permissionless fork of code, data, and reputation must always be possible.
 4. **Code is MIT; data is CC0.** Every contribution flow must include an explicit CC0-1.0 dedication by the contributor.
 5. **Decoding is a pure client-side function.** No API, server, or network call may sit in the critical path of decoding. Networks are used only to fetch and verify immutable artifacts.
 
 ## 2. Terminology
 
-- **Claim** — the atomic unit of data: one signed statement about VIN encoding.
-- **Contributor** — the Ethereum address that signs a claim.
+- **Claim** — a content-addressed fact about VIN encoding (no inline signature).
+- **Attestation** — a signed endorsement of a claim id (`claimHash`) by an Ethereum address.
+- **Attester** — the address that signs an attestation.
 - **Reviewer** — an address that publishes accept/reject attestations for claims.
 - **Epoch** — a compiled snapshot: the set of accepted claims at a point in order.
-- **Manifest** — the signed document describing an epoch.
+- **Manifest** — the signed document describing an epoch; the publisher attests the whole claim set.
 - **Publisher** — the address that signs a manifest.
-- **Dataset** — the canonical compiled artifact of an epoch (JSONL), plus derived caches (SQLite).
+- **Dataset** — the canonical compiled artifact of an epoch (JSONL of claim fact cores), plus derived caches (per-WMI leaves and Merkle root).
 - **Anchor** — a record of a manifest hash in a blockchain registry.
 
 ## 3. Hashing and canonicalization
 
 - Hash function: **SHA-256**. All identifiers are `sha256:<hex>` of a document's canonical bytes.
 - Canonical form of every JSON document: **RFC 8785 (JCS)** — UTF-8, lexicographically sorted keys, no insignificant whitespace.
-- The identity of a claim or manifest is the hash of its canonical form **including** the `signature` field. The *signing payload* is the canonical form **excluding** the `signature` field.
+- The identity of a **claim** is `claimHash`: SHA-256 of the JCS canonical form of the claim fact core (no `signature`, no `contributor`). The dataset JSONL contains claim fact cores only.
+- The identity of a **manifest** is the hash of its canonical form **including** the `signature` field.
+- The *signing payload* for manifests and attestations is the canonical form **excluding** the `signature` field.
 
 ## 4. Claims
 
@@ -46,12 +49,12 @@ These hold for every version of the protocol. A change that violates one of them
   "provenance": "<taxonomy, see 4.6>",
   "license": "CC0-1.0",                    // literal, required
   "supersedes": "sha256:...",              // optional: claim being corrected
-  "contributor": "0x...",                  // EIP-55 checksummed address
-  "signature": "0x..."                     // EIP-191, see section 5
 }
 ```
 
-Unknown top-level keys are invalid (fail closed). Empty optional keys are omitted, never null. Required-nullable keys (currently only `vds-binding.key.yearTo`) are always present; `null` is a meaningful value (open-ended year range) and is included in canonical form.
+Unknown top-level keys are invalid (fail closed). Empty optional keys are omitted, never null. Required-nullable keys (`vds-binding.key.yearTo`, `wmi.value.country`, `wmi.value.vehicleType`) are always present; `null` is a meaningful value and is included in canonical form.
+
+Claims carry **no** `contributor` or `signature`. Attestation is provided separately (section 4.9) or via a signed epoch manifest (section 7). `provenance` is always required on each claim.
 
 Manifests use `schemaVersion: "1.0"` (see section 7.1). A manifest may reference claims with mixed claim `schemaVersion` minors under major 1; each claim self-describes.
 
@@ -60,9 +63,11 @@ Manifests use `schemaVersion: "1.0"` (see section 7.1). A manifest may reference
 **`wmi`** (`schemaVersion: "1.0"`) — maps a World Manufacturer Identifier to identity attributes.
 
 ```jsonc
-"key":   { "wmi": "VF3" },
-"value": { "manufacturer": "Peugeot", "country": "FR", "region": "EU" }
+"key":   { "wmi": "VF3" },              // 3- or 6-char WMI (6-char when position 3 = "9")
+"value": { "manufacturer": "Peugeot", "country": "FR", "vehicleType": "Passenger Car", "region": "EU" }
 ```
+
+`country` and `vehicleType` are required-nullable: always present on the wire; `null` when the source has no value (mirrors bundled WMI lookup semantics).
 
 **`vds-schema`** (`schemaVersion: "1.1"`) — declares a coding schema. Its `claimHash` is the schema's stable reference used by patterns and bindings. The declaration is intentionally minimal so its identity is stable — descriptive fields only, no patterns inside.
 
@@ -73,9 +78,7 @@ Manifests use `schemaVersion: "1.0"` (see section 7.1). A manifest may reference
   "key": { "name": "Ford car 2011 (vPIC 2225)" },   // descriptive; identity = claimHash
   "value": {},                                       // reserved; empty object in 1.1
   "provenance": "regulatory/us-vpic",
-  "license": "CC0-1.0",
-  "contributor": "0x...",
-  "signature": "0x..."
+  "license": "CC0-1.0"
 }
 ```
 
@@ -86,17 +89,15 @@ Manifests use `schemaVersion: "1.0"` (see section 7.1). A manifest may reference
   "schemaVersion": "1.1",
   "type": "vds-binding",
   "key": {
-    "wmi": "1FA",                 // 3- or 6-char WMI
-    "yearFrom": 2011,             // inclusive model year
-    "yearTo": 2011,               // inclusive; null = open-ended (still current)
-    "schema": "sha256:..."        // a vds-schema claimHash
+    "wmi": "1FA",
+    "yearFrom": 2011,
+    "yearTo": 2011,
+    "schema": "sha256:..."
   },
-  "value": {},                    // reserved; empty in 1.1
+  "value": {},
   "provenance": "regulatory/us-vpic",
   "license": "CC0-1.0",
-  "supersedes": "sha256:...",     // optional — e.g. correcting a year range
-  "contributor": "0x...",
-  "signature": "0x..."
+  "supersedes": "sha256:..."
 }
 ```
 
@@ -107,19 +108,14 @@ Manifests use `schemaVersion: "1.0"` (see section 7.1). A manifest may reference
   "schemaVersion": "1.1",
   "type": "vds-pattern",
   "key": {
-    "schema": "sha256:...",       // a vds-schema claimHash
-    "match": {
-      "vds": "**BB",              // matches positions 4–8; grammar in 4.3
-      "vis": "*G"                 // OPTIONAL; matches positions 10.. ; omit if unused
-    }
+    "schema": "sha256:...",
+    "match": { "vds": "**BB", "vis": "*G" }
   },
   "value": { "attribute": "model", "code": "Fusion" },
-  "evidence": ["ar://..."],       // optional
+  "evidence": ["ar://..."],
   "provenance": "regulatory/us-vpic",
   "license": "CC0-1.0",
-  "supersedes": "sha256:...",     // optional — corrects a pattern for ALL bound WMIs
-  "contributor": "0x...",
-  "signature": "0x..."
+  "supersedes": "sha256:..."
 }
 ```
 
@@ -156,7 +152,7 @@ Given a VIN and a model year, over the compiled accepted claim set:
 3. For each bound schema, select `vds-pattern` claims whose `match` applies to the VIN. Emit their attribute/value pairs.
 4. The matcher is pure and total: same (VIN, year, claim set) ⇒ same result.
 
-Decoder implementation is specified here; reference matcher ships in a later phase.
+Reference implementation: `@kargain/vincent/decoder` (`createDecoder({ merkleRoot, getLeaf })`).
 
 ### 4.5 VDS compatibility and versioning
 
@@ -184,19 +180,40 @@ Clients and compilers MUST preserve provenance; consumers choose their own trust
 
 Claims derived from real transactions (e.g., marketplace verifications) MUST be batched and published with randomized delay, and MUST NOT carry timestamps of the underlying event. The claim's only time reference is its anchoring order.
 
+### 4.9 Attestations
+
+Attestations are signed endorsements of claim ids, published separately from the dataset JSONL (EAS, off-chain files, etc.).
+
+```jsonc
+{
+  "schemaVersion": "1.0",
+  "claim": "sha256:...",           // claimHash of the endorsed fact core
+  "attester": "0x...",             // EIP-55 checksummed address
+  "kind": "endorse",               // endorsement kind (1.2: only "endorse")
+  "signature": "0x..."             // EIP-191 over JCS form excluding signature
+}
+```
+
+Verification: recovered address MUST equal `attester`. Bulk epoch imports rely on the manifest publisher's signature over `dataset.jsonlSha256`; individual claims may also carry attestations.
+
 ## 5. Signatures
 
-- Scheme: **EIP-191 (personal_sign)** over the UTF-8 bytes of the JCS canonical form of the document without its `signature` field.
-- Validity: recovered address MUST equal `contributor` (claims) or `publisher` (manifests).
+- Scheme: **EIP-191 (personal_sign)** over the UTF-8 bytes of the JCS signing payload (canonical form excluding `signature`).
+- **Claims:** fact cores are unsigned; no per-claim signature on the wire.
+- **Attestations:** `attester` and `signature` are required; recovered address MUST equal `attester`.
+- **Manifests:** `publisher` and `signature` are required; recovered address MUST equal `publisher`.
 - Verification is fully offline; no chain access is required.
 
-## 6. Review and attestations
+## 6. Review and acceptance
 
-Reviews are published as **EAS (Ethereum Attestation Service)** attestations, but review semantics are chain-neutral: an attestation is meaningful on any chain where the reviewer chooses to publish it.
+Acceptance derives from attestations plus the epoch's declared review policy. Reviews are attestations referencing `claimHash`.
+
+EAS (Ethereum Attestation Service) schemas remain chain-neutral:
 
 - Schema `ClaimReview`: `(bytes32 claimHash, uint8 verdict, string reasonUri)` — verdict: 1 accept, 2 reject.
-- Schema `ManifestAttestation`: `(bytes32 manifestHash, bool rebuilt)` — `rebuilt = true` asserts the attester re-ran the compiler and reproduced `dataset.jsonlSha256` byte-for-byte. Only `rebuilt = true` attestations carry compilation weight.
-- A claim is **accepted for an epoch** when it satisfies the epoch's stated review policy (see 7.2). Disputes are ordinary competing claims plus reviews; there is no separate dispute machinery in v0.1.
+- Schema `ManifestAttestation`: `(bytes32 manifestHash, bool rebuilt)` — `rebuilt = true` asserts the attester re-ran the compiler and reproduced `dataset.jsonlSha256` and `merkleRoot` byte-for-byte. Only `rebuilt = true` attestations carry compilation weight.
+
+A claim is **accepted for an epoch** when it satisfies the epoch's stated review policy (see 7.2). A bulk regulatory epoch is attested by the manifest publisher's signature over the claim set and `jsonlSha256`. Disputes are ordinary competing claims plus attestations; there is no separate dispute machinery in v0.1.
 
 There is no contributor staking. Sybil pressure, if it materializes, may be addressed in a future version by a refundable anti-spam deposit; any such change requires a new schemaVersion.
 
@@ -213,8 +230,8 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
   "claims": ["sha256:...", ...],           // accepted claims, lexicographically sorted
   "compiler": { "name": "vincent-compiler", "version": "1.2.0" },
   "dataset": {
-    "jsonlSha256": "...",                  // canonical artifact hash
-    "sqliteSha256": "...",                 // derived cache hash (informative)
+    "jsonlSha256": "...",                  // canonical artifact hash (normative)
+    "merkleRoot": "...",                   // Merkle root over per-WMI leaf digests (normative)
     "uris": ["ar://...", ...]              // at least one; mirrors welcome
   },
   "publisher": "0x...",
@@ -228,14 +245,16 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 
 - Epochs are **event-driven**: a publisher may build whenever new accepted claims exist. There is no calendar.
 - `reviewPolicy` is declared per manifest; clients decide whether a policy is acceptable to them. Genesis policy: claims with `regulatory/us-vpic` provenance are accepted by import; community claims require reviewer accepts.
-- **Determinism:** given `claims` and `(compiler.name, compiler.version)`, the canonical JSONL MUST be byte-reproducible. The JSONL is sorted by (claim type, key fields, claim hash). The SQLite artifact is a derived cache; its hash is informative, the JSONL hash is normative.
+- **Determinism:** given `claims` and `(compiler.name, compiler.version)`, the canonical JSONL MUST be byte-reproducible. The JSONL contains claim fact cores, sorted by (claim type, key fields, claim hash). **Per-WMI leaves** and the **Merkle root** are derived caches; every leaf digest and `merkleRoot` MUST match a rebuild from the same claims. The JSONL hash and Merkle root are committed in the manifest.
+- **Leaf + Merkle model:** one self-contained **leaf** per WMI key: `{ wmi, bindings[{ yearFrom, yearTo, schemaRef }], schemas: { schemaRef: { patterns } } }` (JCS-canonical JSON, content-addressed by `sha256:<hex>`). Leaves are ordered by WMI. A Merkle tree is built over leaf digests with RFC 6962–style domain separation: leaf node = `SHA256(0x00 || rawDigest)`, internal = `SHA256(0x01 || left || right)`; when a level has an odd count, the last node is carried up unchanged. The client holds only the 32-byte `merkleRoot`. Per VIN it fetches one leaf + Merkle proof, verifies inclusion against the anchored root, and decodes locally. Origin (make/country/region) comes from the bundled WMI table + `vinRegion` — fully offline, no leaf fetch. **Oversized WMIs** (canonical leaf &gt; 128 KiB) are split into year-range **sub-leaves** at keys `wmi#pN` plus a **partition manifest** at key `wmi`; the decoder resolves the manifest, verifies sub-leaves against both `merkleRoot` and manifest `leafHash`, and merges before decode.
+- **Compilation validation:** the compiler validates each claim for parse-time well-formedness only. Epoch integrity is verified by manifest signature plus JSONL/Merkle rebuild (`verifyEpoch`); no per-claim `ecrecover`.
 - **Supersession:** within an epoch's claim set, if claim B (`supersedes: A`) and A are both present, the compiler emits B only. Competing claims for the same key without supersession links are resolved by review weight, then by anchoring order (earlier wins); ties are compiler errors.
 - Publishing is permissionless. Competing manifests for the same epoch height are legitimate; canon is chosen by the client (see 9).
 
 ## 8. Storage
 
 - Default permanent store: **Arweave** (`ar://` URIs). Any content-addressed mirror (IPFS, HTTPS, torrent) is equally valid — the hash, not the location, is the identity.
-- Clients MUST verify `jsonlSha256` / `sqliteSha256` (or the claim/manifest hash) after every fetch, regardless of source.
+- Clients MUST verify `jsonlSha256` and `merkleRoot` (and each fetched leaf via its Merkle proof against the anchored root) after every fetch, regardless of source.
 
 ## 9. Anchoring and canon selection
 

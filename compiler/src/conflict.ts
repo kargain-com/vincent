@@ -1,6 +1,6 @@
-import { claimHash } from '@kargain/vincent/protocol';
 import type { Claim } from '@kargain/vincent/protocol';
 
+import type { PreparedClaim } from './prepared-claim.js';
 import { fail, type CompileResult } from './types.js';
 
 /** Deterministic conflict key per claim type (§7.2 same-key). */
@@ -25,22 +25,22 @@ export function conflictKey(claim: Claim): string {
 
 /** Resolve same-key conflicts by anchor order; ties are errors. */
 export function resolveConflicts(
-  claims: Claim[],
+  prepared: PreparedClaim[],
   anchorIndex: Map<string, number>,
-): CompileResult<Claim[]> {
-  const groups = new Map<string, Claim[]>();
+): CompileResult<PreparedClaim[]> {
+  const groups = new Map<string, PreparedClaim[]>();
 
-  for (const claim of claims) {
-    const key = conflictKey(claim);
+  for (const entry of prepared) {
+    const key = conflictKey(entry.claim);
     const group = groups.get(key);
     if (group === undefined) {
-      groups.set(key, [claim]);
+      groups.set(key, [entry]);
     } else {
-      group.push(claim);
+      group.push(entry);
     }
   }
 
-  const survivors: Claim[] = [];
+  const survivors: PreparedClaim[] = [];
 
   for (const group of groups.values()) {
     if (group.length === 1) {
@@ -48,24 +48,23 @@ export function resolveConflicts(
       continue;
     }
 
-    let best: Claim | undefined;
+    let best: PreparedClaim | undefined;
     let bestAnchor: number | undefined;
 
-    for (const claim of group) {
-      const hash = claimHash(claim);
-      const anchor = anchorIndex.get(hash);
+    for (const entry of group) {
+      const anchor = anchorIndex.get(entry.hash);
       if (anchor === undefined) {
-        return fail('missing-anchor', `no anchor order for claim ${hash}`);
+        return fail('missing-anchor', `no anchor order for claim ${entry.hash}`);
       }
 
       if (best === undefined) {
-        best = claim;
+        best = entry;
         bestAnchor = anchor;
         continue;
       }
 
       if (anchor < bestAnchor!) {
-        best = claim;
+        best = entry;
         bestAnchor = anchor;
         continue;
       }
@@ -73,7 +72,7 @@ export function resolveConflicts(
       if (anchor === bestAnchor) {
         return fail(
           'conflict-tie',
-          `same-key conflict tie for ${conflictKey(claim)} at anchor order ${anchor}`,
+          `same-key conflict tie for ${conflictKey(entry.claim)} at anchor order ${anchor}`,
         );
       }
     }

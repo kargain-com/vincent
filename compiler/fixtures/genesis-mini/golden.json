@@ -1,3 +1,6 @@
 {
-  "jsonlSha256": "sha256:3a0e675112223ff53c3039fe84479d0f3031b7245ad0457a7be9bf7d97b88cdd"
+  "jsonlSha256": "sha256:a0f110eb9b4f2cbd318e5ab909ca1a692bf465c2d73ee516ee36d7bebc6a0eea",
+  "merkleRoot": "sha256:76f6692120d6f8316af6109aee98f8c4782ef6111f2d16959745459df0604f3c",
+  "sampleLeafWmi": "1FA",
+  "sampleLeafHash": "sha256:4e72c1c152bdef738929e8f8f85e56226b38243a260e7b56ee099f5d1e58dd87"
 }

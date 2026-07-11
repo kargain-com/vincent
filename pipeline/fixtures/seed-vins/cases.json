@@ -1,0 +1,208 @@
+[
+  {
+    "vin": "1FAHP3F27CL123456",
+    "year": 2012,
+    "note": "US Ford Fusion",
+    "expected": {
+      "manufacturer": "FORD MOTOR COMPANY",
+      "model": "Focus",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "1G1YY22G165123456",
+    "year": 2006,
+    "note": "US GM Chevrolet Corvette",
+    "expected": {
+      "manufacturer": "GENERAL MOTORS LLC",
+      "model": "Corvette",
+      "bodyType": "Coupe"
+    }
+  },
+  {
+    "vin": "1HGCM82673A123456",
+    "year": 2003,
+    "note": "US Honda Accord",
+    "expected": {
+      "manufacturer": "AMERICAN HONDA MOTOR CO., INC.",
+      "model": "Accord",
+      "bodyType": "Coupe",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "JT2BF28K0X0123456",
+    "year": 1999,
+    "note": "JP Toyota",
+    "expected": {
+      "manufacturer": "TOYOTA MOTOR CORPORATION",
+      "model": "Camry",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "VF3ABC12045678901",
+    "note": "EU Peugeot",
+    "expected": {
+      "manufacturer": "AUTOMOBILES PEUGEOT"
+    }
+  },
+  {
+    "vin": "JHMFA16508S123456",
+    "year": 2008,
+    "note": "JP Honda",
+    "expected": {
+      "manufacturer": "HONDA MOTOR CO., LTD.",
+      "model": "Civic",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "KMHXX00X0XX000000",
+    "year": 2015,
+    "note": "KR Hyundai",
+    "expected": {
+      "manufacturer": "HYUNDAI MOTOR CO"
+    }
+  },
+  {
+    "vin": "WBA3A5C50CF123456",
+    "year": 2012,
+    "note": "DE BMW",
+    "expected": {
+      "manufacturer": "BMW AG",
+      "model": "328i",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "SALSH2E40AA123456",
+    "year": 2010,
+    "note": "GB Land Rover",
+    "expected": {
+      "manufacturer": "JAGUAR LAND ROVER LIMITED",
+      "model": "Range Rover Sport",
+      "bodyType": "Sport Utility Vehicle (SUV)/Multi-Purpose Vehicle (MPV)",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "5YJSA1E16HF123456",
+    "year": 2017,
+    "note": "US Tesla",
+    "expected": {
+      "manufacturer": "TESLA, INC.",
+      "model": "Model S",
+      "bodyType": "Hatchback/Liftback/Notchback",
+      "fuelType": "Electric"
+    }
+  },
+  {
+    "vin": "WAUZZZ8V0EA123456",
+    "year": 2014,
+    "note": "DE Audi",
+    "expected": {
+      "manufacturer": "AUDI AG"
+    }
+  },
+  {
+    "vin": "ZFF67NFA000123456",
+    "year": 2010,
+    "note": "IT Ferrari",
+    "expected": {
+      "manufacturer": "FERRARI S.P.A.",
+      "model": "458 Italia",
+      "bodyType": "Coupe",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "YV1RS592041234567",
+    "year": 2004,
+    "note": "SE Volvo",
+    "expected": {
+      "manufacturer": "VOLVO CAR CORPORATION",
+      "model": "S60",
+      "bodyType": "Sedan/Saloon"
+    }
+  },
+  {
+    "vin": "1N4AL3AP5DC123456",
+    "year": 2013,
+    "note": "US Nissan Altima",
+    "expected": {
+      "manufacturer": "NISSAN NORTH AMERICA, INC.",
+      "model": "Altima",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "2T1BURHE9FC123456",
+    "year": 2015,
+    "note": "CA Toyota",
+    "expected": {
+      "manufacturer": "TOYOTA MOTOR MANUFACTURING CANADA",
+      "model": "Corolla",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "3VWDX7AJ2DM123456",
+    "year": 2013,
+    "note": "MX Volkswagen",
+    "expected": {
+      "manufacturer": "VOLKSWAGEN DE MEXICO SA DE CV",
+      "model": "Jetta",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "4T1BF1FK7EU123456",
+    "year": 2014,
+    "note": "US Toyota Camry ambiguous year candidate",
+    "expected": {
+      "manufacturer": "TOYOTA MOTOR MANUFACTURING, KENTUCKY, INC.",
+      "model": "Camry",
+      "bodyType": "Sedan/Saloon",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "1FTFW1ET1DFC12345",
+    "year": 2013,
+    "note": "US Ford truck",
+    "expected": {
+      "manufacturer": "FORD MOTOR COMPANY",
+      "model": "F-150",
+      "bodyType": "Pickup",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "1C4RJFBG8FC123456",
+    "year": 2015,
+    "note": "US Jeep",
+    "expected": {
+      "manufacturer": "FCA US LLC",
+      "fuelType": "Gasoline"
+    }
+  },
+  {
+    "vin": "1GKS2JKJXFR123456",
+    "year": 2015,
+    "note": "US GMC Yukon 6-char WMI region",
+    "expected": {
+      "manufacturer": "GENERAL MOTORS LLC",
+      "model": "Yukon XL",
+      "bodyType": "Sport Utility Vehicle (SUV)/Multi-Purpose Vehicle (MPV)",
+      "fuelType": "Gasoline"
+    }
+  }
+]

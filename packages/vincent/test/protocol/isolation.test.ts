@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import baseline from './baseline-dist.json';
 import golden from './fixtures/golden.json';
-import { signClaim, signManifest } from '../../src/protocol/sign.js';
+import { attest, signManifest } from '../../src/protocol/sign.js';
 import { claimHash } from '../../src/protocol/hash.js';
 
 const packageRoot = process.cwd();
@@ -60,26 +60,24 @@ describe('protocol isolation', () => {
 
 describe('golden fixture generator', () => {
   it('matches committed golden hashes', () => {
-    const { privateKey, unsigned, hashes } = golden;
-    const wmi = signClaim(unsigned.wmi, privateKey);
-    const vdsSchema = signClaim(unsigned.vdsSchema, privateKey);
-    const vdsBinding = signClaim(unsigned.vdsBinding, privateKey);
-    const vdsPattern = signClaim(unsigned.vdsPattern, privateKey);
-    const year = signClaim(unsigned.yearHint, privateKey);
-    const claims = [
-      claimHash(wmi),
-      claimHash(vdsSchema),
-      claimHash(vdsBinding),
-      claimHash(vdsPattern),
-      claimHash(year),
+    const { privateKey, claims, hashes } = golden;
+    expect(claimHash(claims.wmi)).toBe(hashes.wmi);
+    expect(claimHash(claims.vdsSchema)).toBe(hashes.vdsSchema);
+    expect(claimHash(claims.vdsBinding)).toBe(hashes.vdsBinding);
+    expect(claimHash(claims.vdsPattern)).toBe(hashes.vdsPattern);
+    expect(claimHash(claims.yearHint)).toBe(hashes.yearHint);
+
+    const att = attest(hashes.wmi, privateKey);
+    expect(att.claim).toBe(hashes.wmi);
+
+    const manifestClaims = [
+      hashes.wmi,
+      hashes.vdsSchema,
+      hashes.vdsBinding,
+      hashes.vdsPattern,
+      hashes.yearHint,
     ].sort();
-    const manifest = signManifest({ ...unsigned.manifest, claims }, privateKey);
-    expect(claimHash(wmi)).toBe(hashes.wmi);
-    expect(claimHash(vdsSchema)).toBe(hashes.vdsSchema);
-    expect(claimHash(vdsBinding)).toBe(hashes.vdsBinding);
-    expect(claimHash(vdsPattern)).toBe(hashes.vdsPattern);
-    expect(claimHash(year)).toBe(hashes.yearHint);
-    expect(manifest.claims).toEqual(claims);
-    expect(golden.signed).toBeDefined();
+    const manifest = signManifest({ ...golden.manifest, claims: manifestClaims }, privateKey);
+    expect(manifest.claims).toEqual(manifestClaims);
   });
 });

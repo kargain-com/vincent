@@ -1,34 +1,76 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { BindingRow, DatasetDb, PatternRow, WmiRow } from '../../src/decoder/dataset-db.js';
 import * as modelYear from '../../src/model-year.js';
+import type { DecodeLeaf, LeafBinding } from '../../src/decoder/leaf-types.js';
 import {
   bindingContainsYear,
   collectHitsForBindings,
   collectPatternHits,
   collectTaggedHits,
-  decodeFromDataset,
+  decodeFromLeaf,
   mergeHits,
   mergeTaggedHits,
   resolveWmiKey,
 } from '../../src/decoder/resolve.js';
 import { VIN_2011, VIN_2014, VIN_BODY } from './helpers.js';
 
-const SCHEMA = 'sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09';
+const SCHEMA = 'sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556';
 
-function makeDb(config: {
-  wmi?: WmiRow | null;
-  bindings?: BindingRow[];
-  patterns?: PatternRow[];
-}): DatasetDb {
+function makeLeaf(config: {
+  bindings?: LeafBinding[];
+  patterns?: Array<{
+    schemaRef: string;
+    match: { vds: string; vis?: string };
+    attribute: string;
+    code: string;
+  }>;
+}): DecodeLeaf {
+  const schemas: DecodeLeaf['schemas'] = {};
+  for (const pattern of config.patterns ?? []) {
+    const list = schemas[pattern.schemaRef]?.patterns ?? [];
+    list.push({
+      match: pattern.match,
+      attribute: pattern.attribute,
+      code: pattern.code,
+    });
+    schemas[pattern.schemaRef] = { patterns: list };
+  }
+
   return {
-    getWmi: () => config.wmi ?? null,
-    getBindings: (_wmi, year) =>
-      (config.bindings ?? []).filter((binding) => bindingContainsYear(binding, year)),
-    getPatterns: (schemaHash) =>
-      (config.patterns ?? []).filter((pattern) => pattern.schemaHash === schemaHash),
+    wmi: '1FA',
+    bindings: config.bindings ?? [],
+    schemas,
   };
 }
+
+const wmi = {
+  wmi: '1FA',
+  manufacturer: 'Ford',
+  country: 'US',
+  vehicleType: 'Passenger Car',
+  region: 'NA',
+};
+
+const binding2011: LeafBinding = {
+  yearFrom: 2010,
+  yearTo: 2012,
+  schemaRef: SCHEMA,
+};
+
+const binding2014: LeafBinding = {
+  yearFrom: 2013,
+  yearTo: null,
+  schemaRef: SCHEMA,
+};
+
+const patterns = [
+  {
+    schemaRef: SCHEMA,
+    match: { vds: '**BB', vis: '*G' },
+    attribute: 'model',
+    code: 'Fusion',
+  },
+];
 
 describe('resolveWmiKey', () => {
   it('uses 3-char WMI by default', () => {
@@ -41,28 +83,20 @@ describe('resolveWmiKey', () => {
 });
 
 describe('bindingContainsYear', () => {
-  const binding: BindingRow = {
-    claimHash: 'sha256:a',
-    wmi: '1FA',
-    yearFrom: 2010,
-    yearTo: 2012,
-    schemaHash: SCHEMA,
-  };
-
   it('accepts years inside a closed range', () => {
-    expect(bindingContainsYear(binding, 2011)).toBe(true);
+    expect(bindingContainsYear(binding2011, 2011)).toBe(true);
   });
 
   it('accepts the upper bound', () => {
-    expect(bindingContainsYear(binding, 2012)).toBe(true);
+    expect(bindingContainsYear(binding2011, 2012)).toBe(true);
   });
 
   it('rejects years after yearTo', () => {
-    expect(bindingContainsYear(binding, 2013)).toBe(false);
+    expect(bindingContainsYear(binding2011, 2013)).toBe(false);
   });
 
   it('treats null yearTo as open-ended', () => {
-    expect(bindingContainsYear({ ...binding, yearTo: null }, 2030)).toBe(true);
+    expect(bindingContainsYear({ ...binding2011, yearTo: null }, 2030)).toBe(true);
   });
 });
 
@@ -72,8 +106,7 @@ describe('mergeHits', () => {
       {
         attribute: 'model',
         code: 'Fusion',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:1',
+        schemaRef: SCHEMA,
       },
     ]);
     expect(attrs).toEqual([
@@ -82,7 +115,6 @@ describe('mergeHits', () => {
         value: 'Fusion',
         ambiguous: false,
         schema: SCHEMA,
-        sourceClaimHash: 'sha256:1',
       },
     ]);
   });
@@ -92,14 +124,12 @@ describe('mergeHits', () => {
       {
         attribute: 'model',
         code: 'Fusion',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:1',
+        schemaRef: SCHEMA,
       },
       {
         attribute: 'model',
         code: 'Fusion-ALT',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:2',
+        schemaRef: SCHEMA,
       },
     ]);
     expect(attrs[0].ambiguous).toBe(true);
@@ -117,8 +147,7 @@ describe('mergeTaggedHits', () => {
           hit: {
             attribute: 'model',
             code: 'Old',
-            schemaHash: SCHEMA,
-            claimHash: 'sha256:1',
+            schemaRef: SCHEMA,
           },
         },
         {
@@ -126,8 +155,7 @@ describe('mergeTaggedHits', () => {
           hit: {
             attribute: 'model',
             code: 'New',
-            schemaHash: SCHEMA,
-            claimHash: 'sha256:2',
+            schemaRef: SCHEMA,
           },
         },
       ],
@@ -145,8 +173,7 @@ describe('mergeTaggedHits', () => {
           hit: {
             attribute: 'model',
             code: 'A',
-            schemaHash: SCHEMA,
-            claimHash: 'sha256:1',
+            schemaRef: SCHEMA,
           },
         },
         {
@@ -154,8 +181,7 @@ describe('mergeTaggedHits', () => {
           hit: {
             attribute: 'model',
             code: 'B',
-            schemaHash: SCHEMA,
-            claimHash: 'sha256:2',
+            schemaRef: SCHEMA,
           },
         },
       ],
@@ -173,8 +199,7 @@ describe('mergeTaggedHits', () => {
           hit: {
             attribute: 'model',
             code: 'Old',
-            schemaHash: SCHEMA,
-            claimHash: 'sha256:1',
+            schemaRef: SCHEMA,
           },
         },
         {
@@ -182,8 +207,7 @@ describe('mergeTaggedHits', () => {
           hit: {
             attribute: 'bodyType',
             code: 'Sedan',
-            schemaHash: SCHEMA,
-            claimHash: 'sha256:2',
+            schemaRef: SCHEMA,
           },
         },
       ],
@@ -193,66 +217,21 @@ describe('mergeTaggedHits', () => {
   });
 });
 
-describe('decodeFromDataset', () => {
-  const wmi: WmiRow = {
-    wmi: '1FA',
-    manufacturer: 'Ford',
-    country: 'US',
-    region: 'NA',
-    claimHash: 'sha256:wmi',
-  };
-
-  const binding2011: BindingRow = {
-    claimHash: 'sha256:bind2011',
-    wmi: '1FA',
-    yearFrom: 2010,
-    yearTo: 2012,
-    schemaHash: SCHEMA,
-  };
-
-  const binding2014: BindingRow = {
-    claimHash: 'sha256:bind2014',
-    wmi: '1FA',
-    yearFrom: 2013,
-    yearTo: null,
-    schemaHash: SCHEMA,
-  };
-
-  const patterns: PatternRow[] = [
-    {
-      claimHash: 'sha256:model',
-      schemaHash: SCHEMA,
-      matchVds: '**BB',
-      matchVis: '*G',
-      attribute: 'model',
-      code: 'Fusion',
-    },
-  ];
+describe('decodeFromLeaf', () => {
+  const leaf = makeLeaf({
+    bindings: [binding2011, binding2014],
+    patterns,
+  });
 
   it('returns validation errors for invalid VINs without guessing attributes', () => {
-    const result = decodeFromDataset(makeDb({ wmi }), '!!!');
+    const result = decodeFromLeaf(leaf, '!!!', wmi);
     expect(result.valid).toBe(false);
-    expect(result.wmi).toBeNull();
     expect(result.attributes).toEqual([]);
   });
 
-  it('resolves WMI from the dataset', () => {
-    const result = decodeFromDataset(makeDb({ wmi, bindings: [binding2011], patterns }), VIN_2011, {
-      year: 2011,
-    });
+  it('resolves WMI from the decode context', () => {
+    const result = decodeFromLeaf(leaf, VIN_2011, wmi, { year: 2011 });
     expect(result.wmi?.manufacturer).toBe('Ford');
-  });
-
-  it('returns early when WMI is absent from the dataset', () => {
-    const result = decodeFromDataset(makeDb({ wmi: null }), VIN_2011, { year: 2011 });
-    expect(result.wmi).toBeNull();
-    expect(result.attributes).toEqual([]);
-  });
-
-  it('returns early for VINs shorter than three characters', () => {
-    const result = decodeFromDataset(makeDb({ wmi }), '1F', { year: 2011 });
-    expect(result.wmi).toBeNull();
-    expect(result.attributes).toEqual([]);
   });
 
   it('returns no attributes when model year stays ambiguous with no candidates', () => {
@@ -262,45 +241,34 @@ describe('decodeFromDataset', () => {
       best: null,
       method: 'invalid',
     });
-    const result = decodeFromDataset(makeDb({ wmi, bindings: [binding2011], patterns }), VIN_2011);
+    const result = decodeFromLeaf(leaf, VIN_2011, wmi);
     expect(result.year.ambiguous).toBe(true);
     expect(result.attributes).toEqual([]);
     spy.mockRestore();
   });
 
   it('selects patterns through year-scoped bindings', () => {
-    const db = makeDb({ wmi, bindings: [binding2011, binding2014], patterns });
-    const hits2011 = collectHitsForBindings(db, VIN_2011, [binding2011]);
-    const hits2014 = collectHitsForBindings(db, VIN_2014, [binding2014]);
+    const hits2011 = collectHitsForBindings(leaf, VIN_2011, [binding2011]);
+    const hits2014 = collectHitsForBindings(leaf, VIN_2014, [binding2014]);
     expect(hits2011[0]?.code).toBe('Fusion');
     expect(hits2014[0]?.code).toBe('Fusion');
-    expect(binding2011.claimHash).not.toBe(binding2014.claimHash);
+    expect(binding2011.schemaRef).toBe(binding2014.schemaRef);
   });
 
   it('collectPatternHits queries bindings for a model year', () => {
-    const hits = collectPatternHits(
-      makeDb({ bindings: [binding2011], patterns }),
-      '1FA',
-      VIN_2011,
-      2011,
-    );
+    const hits = collectPatternHits(leaf, VIN_2011, 2011);
     expect(hits[0]?.code).toBe('Fusion');
   });
 
   it('collectTaggedHits tags pattern hits with candidate years', () => {
-    const tagged = collectTaggedHits(
-      makeDb({ bindings: [binding2011, binding2014], patterns }),
-      '1FA',
-      VIN_2011,
-      [2011, 2014],
-    );
+    const tagged = collectTaggedHits(leaf, VIN_2011, [2011, 2014]);
     expect(tagged.length).toBeGreaterThan(0);
     expect(tagged[0]?.year).toBe(2011);
   });
 
   it('deduplicates patterns from duplicate schema bindings', () => {
-    const duplicateBinding: BindingRow = { ...binding2011, claimHash: 'sha256:dup' };
-    const hits = collectHitsForBindings(makeDb({ patterns }), VIN_2011, [
+    const duplicateBinding: LeafBinding = { ...binding2011, schemaRef: SCHEMA };
+    const hits = collectHitsForBindings(makeLeaf({ patterns }), VIN_2011, [
       binding2011,
       duplicateBinding,
     ]);
@@ -314,13 +282,13 @@ describe('decodeFromDataset', () => {
       best: null,
       method: 'ambiguous',
     });
-    const result = decodeFromDataset(
-      makeDb({
-        wmi,
+    const result = decodeFromLeaf(
+      makeLeaf({
         bindings: [binding2011, binding2014],
         patterns,
       }),
       VIN_2011,
+      wmi,
     );
     expect(result.year.ambiguous).toBe(true);
     expect(result.attributes.find((attr) => attr.attribute === 'model')?.value).toBe('Fusion');
@@ -332,20 +300,17 @@ describe('decodeFromDataset', () => {
       {
         attribute: 'model',
         code: 'A',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:1',
+        schemaRef: SCHEMA,
       },
       {
         attribute: 'model',
         code: 'A',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:1',
+        schemaRef: SCHEMA,
       },
       {
         attribute: 'model',
         code: 'B',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:2',
+        schemaRef: SCHEMA,
       },
     ]);
     expect(attrs[0].candidates).toHaveLength(2);
@@ -356,23 +321,31 @@ describe('decodeFromDataset', () => {
       {
         attribute: 'model',
         code: 'Fusion',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:1',
+        schemaRef: SCHEMA,
       },
       {
         attribute: 'bodyType',
         code: 'Sedan',
-        schemaHash: SCHEMA,
-        claimHash: 'sha256:2',
+        schemaRef: SCHEMA,
       },
     ]);
     expect(attrs.map((attr) => attr.attribute)).toEqual(['bodyType', 'model']);
   });
 
+  it('skips bindings whose schema is missing from leaf.schemas', () => {
+    const missingSchemaLeaf = makeLeaf({
+      bindings: [{ yearFrom: 2010, yearTo: 2012, schemaRef: 'sha256:missing' }],
+      patterns,
+    });
+    const hits = collectPatternHits(missingSchemaLeaf, VIN_2011, 2011);
+    expect(hits).toEqual([]);
+  });
+
   it('returns no attributes when patterns do not match', () => {
-    const result = decodeFromDataset(
-      makeDb({ wmi, bindings: [binding2011], patterns }),
+    const result = decodeFromLeaf(
+      makeLeaf({ bindings: [binding2011], patterns }),
       VIN_BODY,
+      wmi,
       { year: 2011 },
     );
     expect(result.attributes).toEqual([]);

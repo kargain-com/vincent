@@ -8,12 +8,11 @@
     "value": {
       "manufacturer": "Ford",
       "country": "US",
+      "vehicleType": "Passenger Car",
       "region": "NA"
     },
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0xb0056d3f488a0501111d216b26086356a07e34f53fb7bc9e0f473e697cfd9d736593609bd4cf0a39c0c5c4fb3a50d45d6775ebf689708d8426dab220ff75b8081c"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
@@ -23,9 +22,7 @@
     },
     "value": {},
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0xd5574cf222b0c9fd4faf5c9528746f1bee5cd7d89e5b9d8b920e46c715510135742855996a9d77c3ac1fa5577e4d6c43e02bdcf869371d038852cf38e8435ff81c"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
@@ -34,13 +31,11 @@
       "wmi": "1FA",
       "yearFrom": 2010,
       "yearTo": 2012,
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09"
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556"
     },
     "value": {},
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0x9b91a2047a6ab2bcd348b59cb771d6027b518565a628540b7e3a675116dabf3b6f6dd8b5d35ceafdf015a1023291a19802890d6f986341a3ec349b15154306481c"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
@@ -49,19 +44,17 @@
       "wmi": "1FA",
       "yearFrom": 2013,
       "yearTo": null,
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09"
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556"
     },
     "value": {},
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0xaaa18da66dde6cc58714a1a8576d2df31409fbd6de067c5f65df8f372de8efb630e4723f36619e2c2e8c6263cec64cc835df22669a5c1e6ffb1425b389a652011c"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
     "type": "vds-pattern",
     "key": {
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09",
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
       "match": {
         "vds": "**BC"
       }
@@ -71,15 +64,13 @@
       "code": "Sedan"
     },
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0x5ac576e931e1fa80a88d52e655069049284338c5aca693b4affd114f76ed58643f053114f4f7fbded70dae64588a3269966e6a74d3469138e9ba538a2a789edc1b"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
     "type": "vds-pattern",
     "key": {
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09",
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
       "match": {
         "vds": "**BD"
       }
@@ -89,15 +80,13 @@
       "code": "Gasoline"
     },
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0xab6c7846c4d910601f8d100a276e7a901ca39f688625c40cfc5da34ff3e3418618ffc4acb626f902889e105fcf5ad9e0d95391193d6d97da4c5978808e9623ce1b"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
     "type": "vds-pattern",
     "key": {
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09",
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
       "match": {
         "vds": "**BB",
         "vis": "*G"
@@ -108,15 +97,13 @@
       "code": "Fusion-OLD"
     },
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0x8a9bfad74f2584dd11d793217d6a0597f42ee08c289a11ca7aab95c433d98df059b624bf450e34a5f2f131ae210fc9c02c999fd5b9f39120efa7a4c31676a4211b"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
     "type": "vds-pattern",
     "key": {
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09",
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
       "match": {
         "vds": "**BE"
       }
@@ -126,9 +113,7 @@
       "code": "Chicago"
     },
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0x6dd78351fd6e6adeef013a6f4410f36062c9bbbf0c7c77f607475632aae6e038107248760c6951e4a90a251086e9e3a3d1c22f27856208a10a73a48380ce02b31c"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.0",
@@ -139,12 +124,11 @@
     "value": {
       "manufacturer": "Peugeot",
       "country": "FR",
+      "vehicleType": "Passenger Car",
       "region": "EU"
     },
     "provenance": "regulatory/us-vpic",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0xd3cc125d386f601d4a66374773e8df7c8c8f0572f8afa77804d0c9a6c10202c8112cb52c3cbba33512891575a9f4e3936ccc948cb0017ad33103dda13b509ca71b"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.0",
@@ -156,15 +140,13 @@
       "cycleRule": "na-standard"
     },
     "provenance": "community/observation",
-    "license": "CC0-1.0",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0x5618c0c4f2eb1f796bdf0da3cce60acbc144bb020d3162dfb530881c55f0ee1429025235262037887002c5d877e8d428505ced58d8ce7edd6d2a762269dad7091c"
+    "license": "CC0-1.0"
   },
   {
     "schemaVersion": "1.1",
     "type": "vds-pattern",
     "key": {
-      "schema": "sha256:41595169098e35aa01bb60ea9dde790e3c5560136f00095df27bbf1e328c2f09",
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
       "match": {
         "vds": "**BB",
         "vis": "*G"
@@ -176,8 +158,6 @@
     },
     "provenance": "regulatory/us-vpic",
     "license": "CC0-1.0",
-    "supersedes": "sha256:02674e850579e007954e57b5f8b21a428516abdcf69efc188bd76771f4c2ad51",
-    "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0xda518ff9681316c0ef4c4e20375e61f583062e6ee3c5ee118d6569519e66f2ca1b7ad9231777fb1e6f034a43b21e31532b61b5c607839fb0dae73f15447061ed1c"
+    "supersedes": "sha256:7798a53da7897cf777ad7ceec83bdc06ba0dcc48567a0ee1cce4a2c44c03b1a5"
   }
 ]

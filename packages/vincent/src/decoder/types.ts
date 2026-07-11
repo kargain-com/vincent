@@ -1,5 +1,7 @@
 import type { VinError, VinWarning } from '../validation.js';
 
+import type { OriginResult } from './origin.js';
+
 /** Options passed to {@link Decoder.decode}. */
 export interface DecodeOptions {
   /** Explicit model year; overrides decodeModelYear heuristics. */
@@ -10,7 +12,6 @@ export interface DecodeOptions {
 export interface AttributeCandidate {
   value: string;
   schema: string;
-  sourceClaimHash: string;
 }
 
 /** One decoded vehicle attribute from vds-pattern claims. */
@@ -21,16 +22,15 @@ export interface DecodedAttribute {
   yearDependent?: boolean;
   candidates?: AttributeCandidate[];
   schema: string | null;
-  sourceClaimHash: string | null;
 }
 
-/** WMI metadata resolved from the epoch dataset. */
+/** WMI metadata resolved from the bundled ./wmi table + vinRegion. */
 export interface DecodedWmi {
   wmi: string;
   manufacturer: string;
-  country: string;
+  country: string | null;
+  vehicleType: string | null;
   region: string;
-  sourceClaimHash: string;
 }
 
 /** Full decode result for a VIN against a compiled epoch dataset. */
@@ -48,9 +48,13 @@ export interface DecodeResult {
   warnings: VinWarning[];
 }
 
-/** Sync decoder instance opened by {@link createDecoder}. */
+/** Decoder instance opened by {@link createDecoder}. */
 export interface Decoder {
-  decode(vin: string, options?: DecodeOptions): DecodeResult;
+  origin(vin: string): Promise<OriginResult>;
+  decode(vin: string, options?: DecodeOptions): Promise<DecodeResult>;
 }
+
+export type { OriginResult } from './origin.js';
+export type { GetLeaf, MerkleProof } from './leaf-types.js';
 
 export type { VinError, VinWarning };

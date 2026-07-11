@@ -13,5 +13,3 @@ catalog:
   "@types/node": 26.1.1
   adm-zip: 0.5.16
   "@types/adm-zip": 0.5.7
-  sql.js: 1.13.0
-  "@sqlite.org/sqlite-wasm": 3.49.2-build1

@@ -1,6 +1,7 @@
 import { VIN_ALPHABET } from '../constants.js';
 import {
   AR_URI_RE,
+  ATTESTATION_KINDS,
   ATTRIBUTE_NAME_RE,
   CLAIM_TYPES,
   CLAIM_TYPES_V10,
@@ -9,7 +10,7 @@ import {
   SHA256_HASH_RE,
   SIGNATURE_RE,
 } from './constants.js';
-import type { ClaimSchemaVersion, ClaimType, ParseError, ParseResult } from './types.js';
+import type { AttestationKind, ClaimSchemaVersion, ClaimType, ParseError, ParseResult } from './types.js';
 
 export function parseError(code: string, message: string): ParseError {
   return { code, message };
@@ -115,6 +116,13 @@ export function parseSignature(value: unknown): ParseResult<string> {
   return { ok: true, value };
 }
 
+export function parseAttestationKind(value: unknown): ParseResult<AttestationKind> {
+  if (typeof value !== 'string' || !ATTESTATION_KINDS.includes(value as AttestationKind)) {
+    return fail('invalid-kind', 'Invalid attestation kind');
+  }
+  return { ok: true, value: value as AttestationKind };
+}
+
 export function parseNonEmptyString(value: unknown, field: string): ParseResult<string> {
   if (typeof value !== 'string' || value.length === 0) {
     return fail(`invalid-${field}`, `${field} must be a non-empty string`);
@@ -166,6 +174,14 @@ export function parseYearTo(value: unknown): ParseResult<number | null> {
     return { ok: true, value: null };
   }
   return parseModelYear(value, 'yearTo');
+}
+
+/** Required-nullable string: key must be present; null is valid; non-null must be non-empty. */
+export function parseNullableString(value: unknown, field: string): ParseResult<string | null> {
+  if (value === null) {
+    return { ok: true, value: null };
+  }
+  return parseNonEmptyString(value, field);
 }
 
 export function parseEmptyObject(value: unknown, field: string): ParseResult<Record<string, never>> {

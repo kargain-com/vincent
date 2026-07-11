@@ -1,5 +1,7 @@
-import { claimHash } from '@kargain/vincent/protocol';
 import type { Claim } from '@kargain/vincent/protocol';
+
+import type { PreparedClaim } from './prepared-claim.js';
+import { prepareClaims } from './prepared-claim.js';
 
 function compareStrings(a: string, b: string): number {
   if (a < b) {
@@ -25,7 +27,7 @@ function compareYearTo(a: number | null, b: number | null): number {
 }
 
 /** Compare claims for canonical JSONL sort: (type, key fields, claimHash). */
-export function compareClaimsForJsonl(a: Claim, b: Claim): number {
+export function compareClaimsForJsonl(a: Claim, b: Claim, aHash: string, bHash: string): number {
   const typeCmp = compareStrings(a.type, b.type);
   if (typeCmp !== 0) {
     return typeCmp;
@@ -106,10 +108,21 @@ export function compareClaimsForJsonl(a: Claim, b: Claim): number {
     }
   }
 
-  return compareStrings(claimHash(a), claimHash(b));
+  return compareStrings(aHash, bHash);
 }
 
-/** Stable sort claims for canonical JSONL output. */
+/** Stable sort prepared claims for canonical JSONL output. */
+export function sortPreparedClaimsForJsonl(prepared: PreparedClaim[]): PreparedClaim[] {
+  return [...prepared].sort((a, b) =>
+    compareClaimsForJsonl(a.claim, b.claim, a.hash, b.hash),
+  );
+}
+
+/** Stable sort claims for canonical JSONL output (precomputes hashes once). */
 export function sortClaimsForJsonl(claims: Claim[]): Claim[] {
-  return [...claims].sort(compareClaimsForJsonl);
+  const preparedResult = prepareClaims(claims);
+  if (!preparedResult.ok) {
+    throw new Error(preparedResult.error.message);
+  }
+  return sortPreparedClaimsForJsonl(preparedResult.value).map((entry) => entry.claim);
 }

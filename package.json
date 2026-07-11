@@ -11,7 +11,9 @@
     "test": "pnpm -r run test",
     "lint": "eslint .",
     "typecheck": "pnpm --filter @kargain/vincent typecheck && pnpm --filter @kargain/vincent-compiler typecheck && pnpm --filter @kargain/vincent-pipeline typecheck",
-    "generate:wmi": "pnpm --filter @kargain/vincent-pipeline generate:wmi"
+    "generate:wmi": "pnpm --filter @kargain/vincent-pipeline generate:wmi",
+    "generate:seed": "pnpm --filter @kargain/vincent-pipeline generate:seed",
+    "validate:seed": "pnpm --filter @kargain/vincent-pipeline validate:seed"
   },
   "devDependencies": {
     "@changesets/cli": "catalog:",

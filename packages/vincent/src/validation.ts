@@ -4,7 +4,16 @@ import { normalizeVin } from './normalize.js';
 import { vinRegion, type VinRegion } from './region.js';
 
 /** Hard validation error codes. */
-export type VinErrorCode = 'invalid-length' | 'illegal-character' | 'check-digit';
+export type VinErrorCode =
+  | 'invalid-length'
+  | 'illegal-character'
+  | 'check-digit'
+  | 'leaf-hash-mismatch'
+  | 'proof-invalid'
+  | 'invalid-leaf'
+  | 'unknown-wmi'
+  | 'partition-not-found'
+  | 'partition-leaf-hash-mismatch';
 
 /** Advisory validation warning codes. */
 export type VinWarningCode = 'check-digit';

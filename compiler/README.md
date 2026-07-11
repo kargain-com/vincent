@@ -1,9 +1,10 @@
 # @kargain/vincent-compiler
 
-Private epoch compiler for the Vincent protocol (P-3). Accepts a signed claim set and produces:
+Private epoch compiler for the Vincent protocol (P-3). Accepts an accepted claim set and produces:
 
 - **Canonical JSONL** — normative, byte-reproducible artifact (JCS, sorted per PROTOCOL.md §7)
-- **Derived SQLite cache** — lookup-optimized cache for decoder development (P-4)
+- **Per-WMI leaves** — self-contained JSON bundles (bindings + inlined schema patterns), content-addressed
+- **Merkle root** — RFC 6962–style tree over leaf digests ordered by WMI (`merkleRoot` in manifest)
 
 This tool does **not** parse vPIC, fetch network data, or use production signing keys.
 
@@ -12,115 +13,61 @@ This tool does **not** parse vPIC, fetch network data, or use production signing
 | Location | Role |
 |----------|------|
 | `src/compile.ts` | `compile(claims, policy)` pipeline |
+| `src/leaves.ts` | `buildLeaves(claims)` — deterministic per-WMI leaf JSON + hashes; `LEAF_CAP_BYTES` (128 KiB) year-range partitioning for oversized WMIs (`wmi#pN` sub-leaves + manifest at `wmi`) |
+| `src/merkle.ts` | `buildMerkle(orderedLeafDigests)` — Merkle root + proofs |
 | `src/verify-epoch.ts` | `verifyEpoch(manifest, claims)` rebuilt check (§6) |
-| `fixtures/genesis-mini/` | Committed signed test claims + golden `jsonlSha256` |
+| `fixtures/genesis-mini/` | Committed test claims + manifest + golden hashes + leaf files |
+| `fixtures/merkle-rfc6962.json` | Committed Merkle scheme test vectors |
 
 **Why private:** The compiler is a build-time tool (like `pipeline/`), not a runtime library dependency. Consumers verify epochs via manifest hashes; they do not need this package on npm.
 
 ## API
 
 ```typescript
-import { compile, verifyEpoch } from '@kargain/vincent-compiler';
+import { compile, verifyEpoch, buildLeaves, buildMerkle } from '@kargain/vincent-compiler';
 import type { CompilePolicy, EpochBuild } from '@kargain/vincent-compiler';
 ```
 
 ### `compile(claims, policy?)`
 
-1. Validates each claim (`parseClaim` + `verifyClaim` from `@kargain/vincent/protocol`)
+1. Validates each claim (`parseClaim` well-formedness only; no per-claim signatures)
 2. Applies supersession: claim B with `supersedes: A` removes A when both are present
 3. Resolves same-key conflicts by anchor order (§7.2); ties → compiler error
-4. Emits sorted canonical JSONL and derived SQLite bytes
+4. Emits sorted canonical JSONL, per-WMI leaves, and Merkle root + proofs
 
 Returns `{ ok: true, value: EpochBuild }` or `{ ok: false, error }`.
 
-**`EpochBuild`:** `{ jsonl, jsonlSha256, sqlite, sqliteSha256, claimCount, byType }`
+**`EpochBuild`:** `{ jsonl, jsonlSha256, merkleRoot, leaves, claimCount, byType, stageTimingMs }`
+
+where `leaves` is `Map<leafKey, { leaf, leafHash, proof }>` (`leafKey` is `wmi` or `wmi#pN` for sub-leaves; partitioned WMIs also have a manifest at `wmi`).
 
 ### `verifyEpoch(manifest, claims)`
 
 1. Verifies manifest signature
 2. Compiles manifest-listed claims using `manifest.claims` as anchor order
-3. Compares rebuilt `jsonlSha256` to `manifest.dataset.jsonlSha256`
+3. Compares rebuilt `jsonlSha256` and `merkleRoot` to `manifest.dataset`
 
-This is the §6 **`rebuilt = true`** byte-reproducibility check. SQLite hash is not gated.
+This is the §6 **`rebuilt = true`** byte-reproducibility check.
 
-## Compile policy
+## Merkle scheme
 
-```typescript
-interface CompilePolicy {
-  anchorOrder?: readonly string[];           // manifest.claims order for verifyEpoch
-  anchorRank?: Readonly<Record<string, number>>; // explicit ranks; equal rank → tie error
-}
-```
+Domain-separated, second-preimage-resistant (RFC 6962 style):
 
-Review weight (`minAccepts`, reviewers) is **out of scope** for P-3 — input is already the accepted set.
+- Leaf node: `SHA256(0x00 || rawLeafDigest)`
+- Internal node: `SHA256(0x01 || left || right)`
+- Odd-node rule: last node of an odd level is carried up **unchanged** (no padding duplicate)
 
-## JSONL contract
+See `fixtures/merkle-rfc6962.json` for committed test vectors.
 
-- One claim per line: RFC 8785 JCS via `canonicalize()` from `@kargain/vincent/protocol`
-- Every line ends with `\n` (including the last)
-- Sorted by `(type, key fields, claimHash)`:
-  - Types lexicographic: `vds-binding` < `vds-pattern` < `vds-schema` < `wmi` < `year-hint`
-  - `yearTo: null` sorts after integers; absent `match.vis` before present
+## Fixtures
 
-**Determinism:** Two compiles of the same fixture must yield byte-identical JSONL (CI gate). SQLite is best-effort derived.
+Golden hashes in `fixtures/genesis-mini/golden.json` (`jsonlSha256`, `merkleRoot`, sample leaf).
 
-## SQLite schema (derived cache)
-
-Normative source is JSONL. Tables support P-4 decoder lookups per PROTOCOL.md §4.4:
-
-| Table | Primary key | Lookup purpose |
-|-------|-------------|----------------|
-| `wmi` | `wmi` | WMI → manufacturer, country, region |
-| `vds_schema` | `claim_hash` | Schema name by hash |
-| `vds_binding` | `claim_hash` | Bindings by `wmi` (index on `wmi`); `year_to` NULL = open range |
-| `vds_pattern` | `claim_hash` | Patterns by `schema_hash` (index) |
-| `year_hint` | `wmi` | Model-year cycle rule |
-| `_meta` | `key` | `jsonl_sha256`, `claim_count`, `compiler_name`, `compiler_version` |
-
-Example queries:
-
-```sql
-SELECT * FROM wmi WHERE wmi = '1FA';
-SELECT * FROM vds_binding WHERE wmi = '1FA' AND year_from <= 2011 AND (year_to IS NULL OR year_to >= 2011);
-SELECT * FROM vds_pattern WHERE schema_hash = 'sha256:...';
-```
-
-Built with **sql.js** (devDependency only). `sqliteSha256` is informative, not CI-gated.
-
-## Fixture: `fixtures/genesis-mini/`
-
-~11 signed claims using the P-1 Hardhat test key (`golden.json` private key):
-
-| Content | Count |
-|---------|-------|
-| `wmi` | 2 (1FA Ford, VF3 Peugeot) |
-| `vds-schema` | 1 |
-| `vds-binding` | 2 (different year ranges) |
-| `vds-pattern` | 5 (bodyType, fuelType, plant + supersession pair) |
-| `year-hint` | 1 |
-| Supersession | `Fusion-OLD` superseded by corrected `Fusion` pattern |
-
-Golden hash in `fixtures/genesis-mini/golden.json`.
-
-### Regenerate fixture
+Regenerate:
 
 ```bash
+pnpm --filter @kargain/vincent build
 pnpm --filter @kargain/vincent-compiler build
 node compiler/scripts/gen-fixture.mjs
+node compiler/scripts/gen-merkle-vectors.mjs
 ```
-
-Re-commit `claims.json` and `golden.json` if claim content changes.
-
-## Development
-
-```bash
-pnpm install
-pnpm --filter @kargain/vincent build   # protocol dependency
-pnpm --filter @kargain/vincent-compiler test
-```
-
-From repo root: `pnpm lint && pnpm typecheck && pnpm build && pnpm test`
-
-## Protocol reuse
-
-All canonicalization, hashing, and signature verification delegate to `@kargain/vincent/protocol`. This package does not reimplement JCS, SHA-256, or EIP-191.

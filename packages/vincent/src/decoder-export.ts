@@ -1,12 +1,18 @@
 export {
   createDecoder,
   matchExpression,
+  originFromWmiTable,
+  resolveWmiKey,
   type AttributeCandidate,
+  type CreateDecoderOptions,
   type DecodeOptions,
   type DecodeResult,
   type DecodedAttribute,
   type DecodedWmi,
   type Decoder,
+  type GetLeaf,
+  type MerkleProof,
+  type OriginResult,
   type VinError,
   type VinWarning,
 } from './decoder/index.js';

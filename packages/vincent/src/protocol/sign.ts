@@ -1,19 +1,28 @@
-import { addressFromPrivateKey, signPersonalMessage } from './crypto.js';
+import { addressFromPrivateKey, signPersonalMessage, toChecksumAddress } from './crypto.js';
 import { signingPayload } from './hash.js';
-import type { Claim, Manifest, UnsignedClaim, UnsignedManifest } from './types.js';
+import type { Attestation, AttestationKind, Manifest, UnsignedManifest } from './types.js';
 
-/** Sign a claim with EIP-191 personal_sign; sets contributor and signature. */
-export function signClaim(claim: UnsignedClaim, privateKey: string): Claim {
-  const contributor = addressFromPrivateKey(privateKey);
-  const unsigned = { ...claim, contributor };
+/** Create a signed attestation endorsing a claim id (§4.9). */
+export function attest(
+  claimId: string,
+  privateKey: string,
+  kind: AttestationKind = 'endorse',
+): Attestation {
+  const attester = toChecksumAddress(addressFromPrivateKey(privateKey));
+  const unsigned = {
+    schemaVersion: '1.0' as const,
+    claim: claimId,
+    attester,
+    kind,
+  };
   const payload = signingPayload(unsigned);
   const signature = signPersonalMessage(payload, privateKey);
-  return { ...unsigned, signature } as Claim;
+  return { ...unsigned, signature };
 }
 
 /** Sign a manifest with EIP-191 personal_sign; sets publisher and signature. */
 export function signManifest(manifest: UnsignedManifest, privateKey: string): Manifest {
-  const publisher = addressFromPrivateKey(privateKey);
+  const publisher = toChecksumAddress(addressFromPrivateKey(privateKey));
   const unsigned = { ...manifest, publisher };
   const payload = signingPayload(unsigned);
   const signature = signPersonalMessage(payload, privateKey);

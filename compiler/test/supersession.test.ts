@@ -5,9 +5,9 @@ import { compile } from '../src/compile.js';
 import { loadGenesisMiniClaims } from './helpers.js';
 
 describe('supersession', () => {
-  it('removes superseded claim from compiled output', async () => {
+  it('removes superseded claim from compiled output', () => {
     const claims = loadGenesisMiniClaims();
-    const result = await compile(claims, {});
+    const result = compile(claims, {});
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
