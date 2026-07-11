@@ -1,0 +1,20 @@
+{
+  "name": "@kargain/vincent-pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "generate:wmi": "node dist/generate-wmi.js"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "catalog:",
+    "@types/node": "catalog:",
+    "adm-zip": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

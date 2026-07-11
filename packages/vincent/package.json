@@ -1,0 +1,50 @@
+{
+  "name": "@kargain/vincent",
+  "version": "0.1.0",
+  "description": "Offline-first deterministic VIN validation, decoding, and WMI lookup per ISO 3779.",
+  "keywords": [
+    "vin",
+    "vin-decoder",
+    "vehicle",
+    "iso-3779",
+    "offline"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kargain-com/vincent.git",
+    "directory": "packages/vincent"
+  },
+  "homepage": "https://github.com/kargain-com/vincent#readme",
+  "bugs": "https://github.com/kargain-com/vincent/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "4.1.10",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
