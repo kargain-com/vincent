@@ -37,8 +37,16 @@ This document is the founder runbook for publishing `@kargain/vincent` to npm. P
 
 5. **Verify on npm.** Confirm the new version appears at [npmjs.com/package/@kargain/vincent](https://www.npmjs.com/package/@kargain/vincent) and that the tarball contains `dist/`, `README.md`, and `LICENSE`.
 
+6. **Dry-run before publishing.** Inspect tarball contents and entry-point sizes:
+
+   ```bash
+   pnpm --filter @kargain/vincent pack
+   ```
+
+   Confirm the tarball includes `dist/index.js` (main entry, no WMI data), `dist/wmi-export.js`, `dist/wmi-core.generated.js`, and `dist/wmi-extended.generated.js`.
+
 ## Notes
 
 - **Future decoder module:** When the client-side decoder ships, it will declare `@sqlite.org/sqlite-wasm` as an optional peer dependency.
 - **npm provenance:** Deferred until CI publishing is implemented.
-- **Dry-run before first publish:** Use `pnpm --filter @kargain/vincent pack` to inspect tarball contents without publishing.
+- **Dry-run before first publish:** Use `pnpm --filter @kargain/vincent pack` to inspect tarball contents without publishing. Verify layered WMI entry points (`dist/index.js`, `dist/wmi-export.js`, generated data modules) are present.

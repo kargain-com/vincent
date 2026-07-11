@@ -1,9 +1,10 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CHECK_DIGIT_WEIGHTS,
   computeCheckDigit,
   decodeModelYear,
-  lookupWmi,
   normalizeVin,
   PACKAGE,
   TRANSLITERATION,
@@ -12,7 +13,10 @@ import {
   VIN_ALPHABET,
   YEAR_CODES,
 } from '@kargain/vincent';
+import { lookupWmi } from '@kargain/vincent/wmi';
 import { findIllegalChar, isValidVinAlphabet } from '../src/check-digit.js';
+
+const DIST_INDEX = resolve(import.meta.dirname, '../dist/index.js');
 
 describe('PACKAGE', () => {
   it('exports package name', () => {
@@ -382,46 +386,90 @@ describe('decodeModelYear', () => {
   });
 });
 
+describe('main entry', () => {
+  it('does not export lookupWmi', async () => {
+    vi.resetModules();
+    const main = await import('@kargain/vincent');
+    expect('lookupWmi' in main).toBe(false);
+  });
+
+  it('does not decode WMI data when using validateVin', async () => {
+    vi.resetModules();
+    const inflateModule = await import('../src/inflate.vendored.js');
+    const inflateSpy = vi.spyOn(inflateModule, 'inflateRawDeflate');
+
+    const { validateVin: validate } = await import('@kargain/vincent');
+    validate('1HGCM82633A004352');
+    expect(inflateSpy).not.toHaveBeenCalled();
+
+    inflateSpy.mockRestore();
+  });
+
+  it.skipIf(!existsSync(DIST_INDEX))('dist/index.js does not reference WMI data modules', () => {
+    const content = readFileSync(DIST_INDEX, 'utf8');
+    expect(content).not.toMatch(/wmi-core|wmi-extended|WMI_DEFLATE|inflateRawDeflate/);
+  });
+});
+
 describe('lookupWmi', () => {
   it('does not decode WMI data until the first lookupWmi call', async () => {
     vi.resetModules();
     const inflateModule = await import('../src/inflate.vendored.js');
     const inflateSpy = vi.spyOn(inflateModule, 'inflateRawDeflate');
 
-    const { validateVin, lookupWmi: lazyLookupWmi } = await import('@kargain/vincent');
+    const { lookupWmi: lazyLookupWmi } = await import('@kargain/vincent/wmi');
 
-    validateVin('1HGCM82633A004352');
-    expect(inflateSpy).not.toHaveBeenCalled();
-
-    lazyLookupWmi('1HG');
+    await lazyLookupWmi('1HG');
     expect(inflateSpy).toHaveBeenCalledTimes(1);
 
-    lazyLookupWmi('VF3');
+    await lazyLookupWmi('VF3');
     expect(inflateSpy).toHaveBeenCalledTimes(1);
 
     inflateSpy.mockRestore();
   });
 
-  it('resolves known WMIs across regions', () => {
-    expect(lookupWmi('1HG')).toEqual({
+  it('loads extended module only when a 6-char candidate with position 3 = 9 is needed', async () => {
+    vi.resetModules();
+    const loadModule = await import('../src/wmi-load.js');
+    const loadSpy = vi.spyOn(loadModule, 'loadExtendedModule');
+
+    const { lookupWmi: lazyLookupWmi } = await import('@kargain/vincent/wmi');
+
+    await lazyLookupWmi('1HG');
+    expect(loadSpy).not.toHaveBeenCalled();
+
+    await lazyLookupWmi('1HGCM82633A004352');
+    expect(loadSpy).not.toHaveBeenCalled();
+
+    await lazyLookupWmi('2W9044');
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+
+    await lazyLookupWmi('2W9044');
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+
+    loadSpy.mockRestore();
+  });
+
+  it('resolves known WMIs across regions', async () => {
+    expect(await lookupWmi('1HG')).toEqual({
       wmi: '1HG',
       manufacturer: 'AMERICAN HONDA MOTOR CO., INC.',
       country: 'UNITED STATES (USA)',
       vehicleType: 'Passenger Car',
     });
-    expect(lookupWmi('VF3')).toEqual({
+    expect(await lookupWmi('VF3')).toEqual({
       wmi: 'VF3',
       manufacturer: 'AUTOMOBILES PEUGEOT',
       country: 'FRANCE',
       vehicleType: 'Passenger Car',
     });
-    expect(lookupWmi('WAU')).toEqual({
+    expect(await lookupWmi('WAU')).toEqual({
       wmi: 'WAU',
       manufacturer: 'AUDI AG',
       country: 'GERMANY',
       vehicleType: 'Passenger Car',
     });
-    expect(lookupWmi('JHM')).toEqual({
+    expect(await lookupWmi('JHM')).toEqual({
       wmi: 'JHM',
       manufacturer: 'HONDA MOTOR CO., LTD.',
       country: null,
@@ -429,9 +477,9 @@ describe('lookupWmi', () => {
     });
   });
 
-  it('resolves extended WMI from a full 17-char VIN when position 3 is 9', () => {
+  it('resolves extended WMI from a full 17-char VIN when position 3 is 9 on the first call', async () => {
     const vin = '2W9ABCDEFGH044123';
-    expect(lookupWmi(vin)).toEqual({
+    expect(await lookupWmi(vin)).toEqual({
       wmi: '2W9044',
       manufacturer: 'WESTWARD INDUSTRIES LTD.',
       country: 'CANADA',
@@ -439,8 +487,10 @@ describe('lookupWmi', () => {
     });
   });
 
-  it('resolves bare 6-char extended WMI input', () => {
-    expect(lookupWmi('2W9044')).toEqual({
+  it('resolves bare 6-char extended WMI input on the first call', async () => {
+    vi.resetModules();
+    const { lookupWmi: freshLookup } = await import('@kargain/vincent/wmi');
+    expect(await freshLookup('2W9044')).toEqual({
       wmi: '2W9044',
       manufacturer: 'WESTWARD INDUSTRIES LTD.',
       country: 'CANADA',
@@ -448,29 +498,44 @@ describe('lookupWmi', () => {
     });
   });
 
-  it('returns null for unknown WMI', () => {
-    expect(lookupWmi('ZZZ')).toBeNull();
-    expect(lookupWmi('ZZZZZZZZZZZZZZZZZ')).toBeNull();
+  it('reuses in-flight extended load for concurrent lookups', async () => {
+    vi.resetModules();
+    const { lookupWmi: freshLookup } = await import('@kargain/vincent/wmi');
+    const [first, second] = await Promise.all([
+      freshLookup('2W9044'),
+      freshLookup('2W9044'),
+    ]);
+    expect(first).toEqual(second);
+    expect(first?.wmi).toBe('2W9044');
   });
 
-  it('returns null for inputs shorter than 3 characters', () => {
-    expect(lookupWmi('')).toBeNull();
-    expect(lookupWmi('AB')).toBeNull();
+  it('falls back to 3-char WMI when extended 6-char is unknown', async () => {
+    expect(await lookupWmi('2W9000')).toEqual(await lookupWmi('2W9'));
   });
 
-  it('matches bare WMI and full VIN for the same manufacturer', () => {
-    const bare = lookupWmi('1HG');
-    const vin = lookupWmi('1HGCM82633A004352');
+  it('returns null for unknown WMI', async () => {
+    expect(await lookupWmi('ZZZ')).toBeNull();
+    expect(await lookupWmi('ZZZZZZZZZZZZZZZZZ')).toBeNull();
+  });
+
+  it('returns null for inputs shorter than 3 characters', async () => {
+    expect(await lookupWmi('')).toBeNull();
+    expect(await lookupWmi('AB')).toBeNull();
+  });
+
+  it('matches bare WMI and full VIN for the same manufacturer', async () => {
+    const bare = await lookupWmi('1HG');
+    const vin = await lookupWmi('1HGCM82633A004352');
     expect(bare).not.toBeNull();
     expect(vin).toEqual(bare);
   });
 
-  it('falls back from unknown 6-char prefix to matching 3-char WMI', () => {
-    expect(lookupWmi('1HG000')).toEqual(lookupWmi('1HG'));
+  it('falls back from unknown 6-char prefix to matching 3-char WMI', async () => {
+    expect(await lookupWmi('1HG000')).toEqual(await lookupWmi('1HG'));
   });
 
-  it('normalizes lowercase and hyphenated input', () => {
-    expect(lookupWmi('1hg')).toEqual(lookupWmi('1HG'));
-    expect(lookupWmi('vf-3')).toEqual(lookupWmi('VF3'));
+  it('normalizes lowercase and hyphenated input', async () => {
+    expect(await lookupWmi('1hg')).toEqual(await lookupWmi('1HG'));
+    expect(await lookupWmi('vf-3')).toEqual(await lookupWmi('VF3'));
   });
 });

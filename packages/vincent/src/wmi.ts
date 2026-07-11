@@ -1,6 +1,7 @@
 import { inflateRawDeflate } from './inflate.vendored.js';
 import { normalizeVin } from './normalize.js';
-import { WMI_DEFLATE_B64 } from './wmi.generated.js';
+import { WMI_DEFLATE_B64 as CORE_DEFLATE_B64 } from './wmi-core.generated.js';
+import { loadExtendedModule } from './wmi-load.js';
 
 export interface WmiInfo {
   wmi: string;
@@ -21,7 +22,9 @@ interface WmiTable {
   data: readonly (readonly [number, number | null, number | null])[];
 }
 
-let cachedTable: WmiTable | null = null;
+let cachedCoreTable: WmiTable | null = null;
+let cachedExtendedTable: WmiTable | null = null;
+let extendedLoadPromise: Promise<WmiTable> | null = null;
 
 function decodeBase64(base64: string): Uint8Array {
   const binary = atob(base64.replace(/\s+/g, ''));
@@ -32,22 +35,41 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-function loadWmiTable(): WmiTable {
-  if (cachedTable !== null) {
-    return cachedTable;
-  }
-
-  const compressed = decodeBase64(WMI_DEFLATE_B64);
+function decodeTable(b64: string): WmiTable {
+  const compressed = decodeBase64(b64);
   const inflated = inflateRawDeflate(compressed);
   const json = new TextDecoder().decode(inflated);
   const payload = JSON.parse(json) as WmiPayload;
 
-  cachedTable = {
+  return {
     strings: payload.strings,
     keys: payload.keys,
     data: payload.data,
   };
-  return cachedTable;
+}
+
+function loadCoreTable(): WmiTable {
+  if (cachedCoreTable !== null) {
+    return cachedCoreTable;
+  }
+
+  cachedCoreTable = decodeTable(CORE_DEFLATE_B64);
+  return cachedCoreTable;
+}
+
+function loadExtendedTable(): Promise<WmiTable> {
+  if (cachedExtendedTable !== null) {
+    return Promise.resolve(cachedExtendedTable);
+  }
+
+  if (extendedLoadPromise === null) {
+    extendedLoadPromise = loadExtendedModule().then((module) => {
+      cachedExtendedTable = decodeTable(module.WMI_DEFLATE_B64);
+      return cachedExtendedTable;
+    });
+  }
+
+  return extendedLoadPromise;
 }
 
 function wmiCandidates(normalized: string): string[] {
@@ -66,6 +88,10 @@ function wmiCandidates(normalized: string): string[] {
     return [normalized.slice(0, 3)];
   }
   return [];
+}
+
+function needsExtended(candidates: string[]): boolean {
+  return candidates.some((candidate) => candidate.length === 6 && candidate[2] === '9');
 }
 
 function binarySearch(keys: readonly string[], target: string): number {
@@ -97,18 +123,38 @@ function resolveEntry(table: WmiTable, index: number): WmiInfo {
   return { wmi, manufacturer, country, vehicleType };
 }
 
-export function lookupWmi(vinOrWmi: string): WmiInfo | null {
+function lookupInTable(table: WmiTable, candidate: string): WmiInfo | null {
+  const index = binarySearch(table.keys, candidate);
+  if (index < 0) {
+    return null;
+  }
+  return resolveEntry(table, index);
+}
+
+export async function lookupWmi(vinOrWmi: string): Promise<WmiInfo | null> {
   const normalized = normalizeVin(vinOrWmi);
   const candidates = wmiCandidates(normalized);
   if (candidates.length === 0) {
     return null;
   }
 
-  const table = loadWmiTable();
+  if (needsExtended(candidates)) {
+    const extended = await loadExtendedTable();
+    for (const candidate of candidates) {
+      if (candidate.length === 6) {
+        const hit = lookupInTable(extended, candidate);
+        if (hit !== null) {
+          return hit;
+        }
+      }
+    }
+  }
+
+  const core = loadCoreTable();
   for (const candidate of candidates) {
-    const index = binarySearch(table.keys, candidate);
-    if (index >= 0) {
-      return resolveEntry(table, index);
+    const hit = lookupInTable(core, candidate);
+    if (hit !== null) {
+      return hit;
     }
   }
 

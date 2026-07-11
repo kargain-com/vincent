@@ -4,7 +4,8 @@
     "noEmit": true,
     "rootDir": ".",
     "paths": {
-      "@kargain/vincent": ["./src/index.ts"]
+      "@kargain/vincent": ["./src/index.ts"],
+      "@kargain/vincent/wmi": ["./src/wmi-export.ts"]
     }
   },
   "include": ["src", "test", "vitest.config.ts"]

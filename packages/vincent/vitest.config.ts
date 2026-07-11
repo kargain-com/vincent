@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -9,7 +10,8 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.ts',
         // Auto-generated static data — no executable logic to cover
-        'src/wmi.generated.ts',
+        'src/wmi-core.generated.ts',
+        'src/wmi-extended.generated.ts',
         // Vendored third-party inflate (tiny-inflate); validated via lookupWmi integration
         'src/inflate.vendored.ts',
       ],
@@ -22,8 +24,15 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@kargain/vincent': new URL('./src/index.ts', import.meta.url).pathname,
-    },
+    alias: [
+      {
+        find: '@kargain/vincent/wmi',
+        replacement: fileURLToPath(new URL('./src/wmi-export.ts', import.meta.url)),
+      },
+      {
+        find: '@kargain/vincent',
+        replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+      },
+    ],
   },
 });

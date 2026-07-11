@@ -2,7 +2,7 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['eslint.config.js', '**/dist/**', '**/coverage/**', '**/node_modules/**', 'packages/vincent/src/wmi.generated.ts'] },
+  { ignores: ['eslint.config.js', '**/dist/**', '**/coverage/**', '**/node_modules/**', 'packages/vincent/src/wmi-core.generated.ts', 'packages/vincent/src/wmi-extended.generated.ts'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {

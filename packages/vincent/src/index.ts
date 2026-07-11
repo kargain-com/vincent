@@ -28,5 +28,3 @@ export {
   type ModelYearResult,
   type DecodeModelYearOptions,
 } from './model-year.js';
-
-export { lookupWmi, type WmiInfo } from './wmi.js';

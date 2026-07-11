@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { deflateRawSync } from 'node:zlib';
+import { deflateRawSync, gzipSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import AdmZip from 'adm-zip';
@@ -19,7 +19,8 @@ const SOURCE_FILENAME = 'vPICList_lite_2026_06.plain.zip';
 const EXPECTED_SHA256 =
   'ab16275b0994e79b2d9f0fba512797631a107e2c5e18182b043d97a17ef02ea9';
 const PROVENANCE = 'regulatory/us-vpic';
-const SIZE_BUDGET_BYTES = 300 * 1024;
+const CORE_SIZE_BUDGET_BYTES = 100 * 1024;
+const EXTENDED_SIZE_BUDGET_BYTES = 250 * 1024;
 const SQL_BASENAME = 'vPICList_lite_2026_06.sql';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -28,24 +29,46 @@ const CACHE_DIR = join(PIPELINE_ROOT, '.cache');
 const ZIP_PATH = join(CACHE_DIR, SOURCE_FILENAME);
 const EXTRACT_DIR = join(CACHE_DIR, 'extracted');
 const SQL_PATH = join(EXTRACT_DIR, SQL_BASENAME);
-const OUTPUT_PATH = resolve(PIPELINE_ROOT, '../packages/vincent/src/wmi.generated.ts');
+const VINCENT_SRC = resolve(PIPELINE_ROOT, '../packages/vincent/src');
+const OUTPUT_CORE_PATH = join(VINCENT_SRC, 'wmi-core.generated.ts');
+const OUTPUT_EXTENDED_PATH = join(VINCENT_SRC, 'wmi-extended.generated.ts');
 
-interface WmiRow {
+export interface WmiRow {
   wmi: string;
   manufacturer: string;
   country: string | null;
   vehicleType: string | null;
 }
 
-interface WmiPayload {
+export interface WmiPayload {
   strings: string[];
   keys: string[];
   data: [number, number | null, number | null][];
 }
 
-function sha256File(path: string): string {
-  const data = readFileSync(path);
+export interface GeneratedModuleReport {
+  label: 'core' | 'extended';
+  outputPath: string;
+  entryCount: number;
+  fileBytes: number;
+  fileGzipBytes: number;
+  deflateB64Bytes: number;
+  deflateGzipBytes: number;
+  sha256: string;
+}
+
+export interface GenerateWmiOptions {
+  coreOutputPath?: string;
+  extendedOutputPath?: string;
+  skipDownload?: boolean;
+}
+
+function sha256Buffer(data: Buffer | string): string {
   return createHash('sha256').update(data).digest('hex');
+}
+
+function sha256File(path: string): string {
+  return sha256Buffer(readFileSync(path));
 }
 
 function progress(message: string): void {
@@ -73,7 +96,7 @@ async function ensureSourceZip(): Promise<string> {
   const buffer = Buffer.from(await response.arrayBuffer());
   const tmpPath = `${ZIP_PATH}.tmp`;
   writeFileSync(tmpPath, buffer);
-  const sha = createHash('sha256').update(buffer).digest('hex');
+  const sha = sha256Buffer(buffer);
 
   if (sha !== EXPECTED_SHA256) {
     throw new Error(
@@ -238,7 +261,7 @@ async function parseWmiRows(
   return rows;
 }
 
-function buildPayload(rows: WmiRow[]): WmiPayload {
+export function buildPayload(rows: WmiRow[]): WmiPayload {
   const strings: string[] = [];
   const indices = new Map<string, number>();
 
@@ -276,18 +299,25 @@ function chunkBase64(base64: string, lineWidth = 76): string {
   return lines.map((line) => `  '${line}'`).join(' +\n');
 }
 
-function emitGeneratedFile(payload: WmiPayload, sourceSha256: string): string {
+export function emitGeneratedFile(
+  payload: WmiPayload,
+  sourceSha256: string,
+  label: 'core' | 'extended',
+  keyLength: 3 | 6,
+): { content: string; deflateB64: string } {
   const json = JSON.stringify(payload);
   const deflateB64 = deflateRawSync(json, { level: 9 }).toString('base64');
 
-  return `/**
+  const content = `/**
  * @generated — do not edit manually
+ * Module: wmi-${label}
  * Source: ${SOURCE_FILENAME}
  * Source sha256: ${sourceSha256}
  * Provenance: ${PROVENANCE}
  * Encoding: raw-deflate-compressed JSON (strings, sorted keys, tuple data)
+ * Key length: ${String(keyLength)} characters
  * Column mapping:
- *   vpic.wmi.wmi → WMI key (3 or 6 characters)
+ *   vpic.wmi.wmi → WMI key (${String(keyLength)} characters)
  *   vpic.manufacturer.name → manufacturer (via wmi.manufacturerid)
  *   vpic.country.name → country (via wmi.countryid)
  *   vpic.vehicletype.name → vehicleType (via wmi.vehicletypeid)
@@ -304,12 +334,17 @@ export const WMI_SOURCE = {
 export const WMI_DEFLATE_B64 =
 ${chunkBase64(deflateB64)};
 `;
+
+  return { content, deflateB64 };
 }
 
-function reportSizeBudgetExceeded(content: string, rows: WmiRow[]): never {
+function reportSizeBudgetExceeded(
+  label: 'core' | 'extended',
+  content: string,
+  rows: WmiRow[],
+  budgetBytes: number,
+): never {
   const sizeBytes = Buffer.byteLength(content, 'utf8');
-  const threeChar = rows.filter((row) => row.wmi.length === 3).length;
-  const sixChar = rows.filter((row) => row.wmi.length === 6).length;
 
   const byVehicleType = new Map<string, number>();
   for (const row of rows) {
@@ -322,14 +357,73 @@ function reportSizeBudgetExceeded(content: string, rows: WmiRow[]): never {
     .map(([type, count]) => `  ${type}: ${String(count)}`)
     .join('\n');
 
-  progress(`ERROR: Generated file size ${String(sizeBytes)} bytes exceeds ${String(SIZE_BUDGET_BYTES)} byte budget`);
-  progress(`Entries: ${String(rows.length)} total (${String(threeChar)} x 3-char, ${String(sixChar)} x 6-char)`);
+  progress(
+    `ERROR: ${label} generated file size ${String(sizeBytes)} bytes exceeds ${String(budgetBytes)} byte budget`,
+  );
+  progress(`Entries: ${String(rows.length)}`);
   progress(`Vehicle type distribution:\n${distribution}`);
   process.exit(1);
 }
 
-async function main(): Promise<void> {
-  const sourceSha256 = await ensureSourceZip();
+function writeModule(
+  label: 'core' | 'extended',
+  rows: WmiRow[],
+  outputPath: string,
+  sourceSha256: string,
+  budgetBytes: number,
+): GeneratedModuleReport {
+  const keyLength = label === 'core' ? 3 : 6;
+  const payload = buildPayload(rows);
+  const { content, deflateB64 } = emitGeneratedFile(payload, sourceSha256, label, keyLength);
+  const fileBytes = Buffer.byteLength(content, 'utf8');
+
+  if (fileBytes > budgetBytes) {
+    reportSizeBudgetExceeded(label, content, rows, budgetBytes);
+  }
+
+  writeFileSync(outputPath, content, 'utf8');
+
+  const fileGzipBytes = gzipSync(content).length;
+  const deflateBytes = Buffer.byteLength(deflateB64, 'utf8');
+  const deflateGzipBytes = gzipSync(deflateB64).length;
+  const sha256 = sha256Buffer(content);
+
+  progress(
+    `${label}: ${String(rows.length)} entries | file ${String(fileBytes)} B (gzip ${String(fileGzipBytes)} B) | deflate-b64 ${String(deflateBytes)} B (gzip ${String(deflateGzipBytes)} B) | sha256 ${sha256}`,
+  );
+
+  return {
+    label,
+    outputPath,
+    entryCount: rows.length,
+    fileBytes,
+    fileGzipBytes,
+    deflateB64Bytes: deflateBytes,
+    deflateGzipBytes,
+    sha256,
+  };
+}
+
+export async function generateWmiFiles(
+  options: GenerateWmiOptions = {},
+): Promise<GeneratedModuleReport[]> {
+  const coreOutputPath = options.coreOutputPath ?? OUTPUT_CORE_PATH;
+  const extendedOutputPath = options.extendedOutputPath ?? OUTPUT_EXTENDED_PATH;
+
+  let sourceSha256: string;
+  if (options.skipDownload) {
+    if (!existsSync(ZIP_PATH)) {
+      throw new Error(`Cached zip not found at ${ZIP_PATH}`);
+    }
+    sourceSha256 = sha256File(ZIP_PATH);
+    if (sourceSha256 !== EXPECTED_SHA256) {
+      throw new Error(
+        `Cached zip sha256 mismatch: expected ${EXPECTED_SHA256}, got ${sourceSha256}`,
+      );
+    }
+  } else {
+    sourceSha256 = await ensureSourceZip();
+  }
   ensureSqlExtracted();
 
   progress('Parsing lookup tables');
@@ -338,23 +432,44 @@ async function main(): Promise<void> {
   progress('Parsing WMI table');
   const rows = await parseWmiRows(SQL_PATH, lookups);
 
-  progress('Building compact payload');
-  const payload = buildPayload(rows);
+  const coreRows = rows.filter((row) => row.wmi.length === 3);
+  const extendedRows = rows.filter((row) => row.wmi.length === 6);
 
-  progress('Emitting generated TypeScript');
-  const content = emitGeneratedFile(payload, sourceSha256);
-  const sizeBytes = Buffer.byteLength(content, 'utf8');
+  progress(`Building payloads: ${String(coreRows.length)} core, ${String(extendedRows.length)} extended`);
 
-  if (sizeBytes > SIZE_BUDGET_BYTES) {
-    reportSizeBudgetExceeded(content, rows);
-  }
+  const coreReport = writeModule(
+    'core',
+    coreRows,
+    coreOutputPath,
+    sourceSha256,
+    CORE_SIZE_BUDGET_BYTES,
+  );
+  const extendedReport = writeModule(
+    'extended',
+    extendedRows,
+    extendedOutputPath,
+    sourceSha256,
+    EXTENDED_SIZE_BUDGET_BYTES,
+  );
 
-  writeFileSync(OUTPUT_PATH, content, 'utf8');
-  progress(`Wrote ${OUTPUT_PATH} (${String(sizeBytes)} bytes, ${String(rows.length)} entries)`);
+  return [coreReport, extendedReport];
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`generate-wmi failed: ${message}\n`);
-  process.exit(1);
-});
+async function main(): Promise<void> {
+  const reports = await generateWmiFiles();
+  for (const report of reports) {
+    progress(`Wrote ${report.outputPath}`);
+  }
+}
+
+const isMain =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+if (isMain) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`generate-wmi failed: ${message}\n`);
+    process.exit(1);
+  });
+}
