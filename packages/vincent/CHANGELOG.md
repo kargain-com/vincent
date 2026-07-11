@@ -1,5 +1,11 @@
 # @kargain/vincent
 
+## 0.4.0
+
+### Minor Changes
+
+- PROTOCOL v1.1 schema-based VDS claim types (`vds-schema`, `vds-binding`, revised `vds-pattern`), match grammar validation via `parseMatchSegment`, and fail-closed parsing per updated PROTOCOL.md.
+
 ## 0.3.0
 
 ### Minor Changes

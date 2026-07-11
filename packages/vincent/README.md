@@ -38,6 +38,18 @@ Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) 
 
 ### `@kargain/vincent/protocol`
 
+Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.1 claim parsing, JCS canonicalization, and EIP-191 signing. VIN matching and decoder resolution ship in a future decoder module (phase P-4).
+
+**Claim types** (`schemaVersion` per type):
+
+| Type | Version | Purpose |
+|------|---------|---------|
+| `wmi` | 1.0 | WMI → manufacturer / country / region |
+| `year-hint` | 1.0 | Model-year cycle rule for a WMI |
+| `vds-schema` | 1.1 | Declares a coding schema (identity = `claimHash`) |
+| `vds-binding` | 1.1 | Binds WMI + year range to a schema |
+| `vds-pattern` | 1.1 | Single decode rule (schema ref + `match{vds, vis?}`) |
+
 | Export | Description |
 |--------|-------------|
 | `canonicalize(doc)` | RFC 8785 JCS canonical JSON string |
@@ -46,7 +58,8 @@ Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) 
 | `signClaim(claim, privateKey)` / `signManifest(manifest, privateKey)` | EIP-191 sign; sets contributor/publisher |
 | `verifyClaim(claim)` / `verifyManifest(manifest)` | Signature + EIP-55 verification |
 | `parseClaim(json)` / `parseManifest(json)` | Fail-closed wire-format parsing |
-| Types | `Claim`, `Manifest`, `ClaimType`, `Provenance`, `VehicleAttribute`, … |
+| `parseMatchSegment(segment)` | Match grammar validation (§4.3); no VIN matching |
+| Types | `Claim`, `Manifest`, `MatchToken`, `VdsSchemaClaim`, `VdsBindingClaim`, `VdsPatternClaim`, … |
 
 ## Usage
 

@@ -16,9 +16,20 @@ describe('sign and verify', () => {
     expect(parseClaim(signed).ok).toBe(true);
   });
 
+  it('signs and verifies vds-schema claim roundtrip', () => {
+    const signed = signClaim(unsigned.vdsSchema, privateKey);
+    expect(verifyClaim(signed)).toEqual({ ok: true });
+  });
+
+  it('signs and verifies vds-binding claim roundtrip', () => {
+    const signed = signClaim(unsigned.vdsBinding, privateKey);
+    expect(verifyClaim(signed)).toEqual({ ok: true });
+  });
+
   it('signs and verifies vds-pattern claim roundtrip', () => {
     const signed = signClaim(unsigned.vdsPattern, privateKey);
     expect(verifyClaim(signed)).toEqual({ ok: true });
+    expect(parseClaim(signed)).toEqual({ ok: true, value: signed });
   });
 
   it('signs and verifies year-hint claim roundtrip', () => {
@@ -28,9 +39,17 @@ describe('sign and verify', () => {
 
   it('signs and verifies genesis manifest roundtrip', () => {
     const wmi = signClaim(unsigned.wmi, privateKey);
-    const vds = signClaim(unsigned.vdsPattern, privateKey);
+    const vdsSchema = signClaim(unsigned.vdsSchema, privateKey);
+    const vdsBinding = signClaim(unsigned.vdsBinding, privateKey);
+    const vdsPattern = signClaim(unsigned.vdsPattern, privateKey);
     const year = signClaim(unsigned.yearHint, privateKey);
-    const claims = [claimHash(wmi), claimHash(vds), claimHash(year)].sort();
+    const claims = [
+      claimHash(wmi),
+      claimHash(vdsSchema),
+      claimHash(vdsBinding),
+      claimHash(vdsPattern),
+      claimHash(year),
+    ].sort();
     const signed = signManifest({ ...unsigned.manifest, claims }, privateKey);
     expect(signed.publisher).toBe(address);
     expect(verifyManifest(signed)).toEqual({ ok: true });

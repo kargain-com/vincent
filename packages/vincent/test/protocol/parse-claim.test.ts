@@ -4,12 +4,22 @@ import golden from './fixtures/golden.json';
 import { parseClaim } from '../../src/protocol/parse-claim.js';
 
 const validWmi = golden.signed.wmi;
+const validVdsSchema = golden.signed.vdsSchema;
+const validVdsBinding = golden.signed.vdsBinding;
 const validVds = golden.signed.vdsPattern;
 const validYear = golden.signed.yearHint;
 
 describe('parseClaim', () => {
   it('accepts valid wmi claim', () => {
     expect(parseClaim(validWmi)).toEqual({ ok: true, value: validWmi });
+  });
+
+  it('accepts valid vds-schema claim', () => {
+    expect(parseClaim(validVdsSchema)).toEqual({ ok: true, value: validVdsSchema });
+  });
+
+  it('accepts valid vds-binding claim', () => {
+    expect(parseClaim(validVdsBinding)).toEqual({ ok: true, value: validVdsBinding });
   });
 
   it('accepts valid vds-pattern claim', () => {
@@ -48,8 +58,12 @@ describe('parseClaim', () => {
     expect(parseClaim({ ...validWmi, supersedes: null }).ok).toBe(false);
   });
 
-  it('rejects unsupported schemaVersion', () => {
+  it('rejects wrong schemaVersion for wmi', () => {
     expect(parseClaim({ ...validWmi, schemaVersion: '1.1' }).ok).toBe(false);
+  });
+
+  it('rejects wrong schemaVersion for vds-pattern', () => {
+    expect(parseClaim({ ...validVds, schemaVersion: '1.0' }).ok).toBe(false);
   });
 
   it('rejects unsupported schema major version', () => {
@@ -98,18 +112,126 @@ describe('parseClaim', () => {
       .toBe(false);
   });
 
-  it('rejects invalid vds positions', () => {
-    expect(parseClaim({ ...validVds, key: { ...validVds.key, positions: '9-10' } }).ok).toBe(false);
-    expect(parseClaim({ ...validVds, key: { ...validVds.key, positions: '8-4' } }).ok).toBe(false);
+  it('rejects invalid vds-schema key', () => {
+    expect(parseClaim({ ...validVdsSchema, key: { name: '' } }).ok).toBe(false);
+    expect(parseClaim({ ...validVdsSchema, key: { name: 'x', extra: 'y' } }).ok).toBe(false);
   });
 
-  it('rejects invalid vds pattern', () => {
-    expect(parseClaim({ ...validVds, key: { ...validVds.key, pattern: 'LC**' } }).ok).toBe(false);
-    expect(parseClaim({ ...validVds, key: { ...validVds.key, pattern: 'LC**I' } }).ok).toBe(false);
+  it('rejects non-empty vds-schema value', () => {
+    expect(parseClaim({ ...validVdsSchema, value: { reserved: true } }).ok).toBe(false);
   });
 
-  it('rejects invalid vehicle attribute', () => {
-    expect(parseClaim({ ...validVds, value: { attribute: 'color', code: '308' } }).ok).toBe(false);
+  it('rejects invalid vds-binding wmi length', () => {
+    expect(parseClaim({ ...validVdsBinding, key: { ...validVdsBinding.key, wmi: 'AB' } }).ok).toBe(
+      false,
+    );
+  });
+
+  it('accepts 6-char binding wmi', () => {
+    expect(
+      parseClaim({
+        ...validVdsBinding,
+        key: { ...validVdsBinding.key, wmi: '1FA6P9' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('accepts null yearTo for open-ended binding', () => {
+    expect(
+      parseClaim({
+        ...validVdsBinding,
+        key: { ...validVdsBinding.key, yearTo: null },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('rejects non-integer yearFrom', () => {
+    expect(
+      parseClaim({
+        ...validVdsBinding,
+        key: { ...validVdsBinding.key, yearFrom: 2011.5 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects yearFrom greater than yearTo', () => {
+    expect(
+      parseClaim({
+        ...validVdsBinding,
+        key: { ...validVdsBinding.key, yearFrom: 2012, yearTo: 2011 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects missing schema ref in binding', () => {
+    expect(
+      parseClaim({
+        ...validVdsBinding,
+        key: { wmi: '1FA', yearFrom: 2011, yearTo: 2011 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects invalid schema hash in binding', () => {
+    expect(
+      parseClaim({
+        ...validVdsBinding,
+        key: { ...validVdsBinding.key, schema: 'sha256:abc' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects invalid vds-pattern match segments', () => {
+    expect(
+      parseClaim({
+        ...validVds,
+        key: { ...validVds.key, match: { vds: '**C[AB', vis: '*G' } },
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseClaim({
+        ...validVds,
+        key: { ...validVds.key, match: { vds: 'I**' } },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects unknown match keys', () => {
+    expect(
+      parseClaim({
+        ...validVds,
+        key: {
+          schema: validVds.key.schema,
+          match: { vds: '*G', extra: 'x' },
+        },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects missing schema ref in vds-pattern', () => {
+    expect(
+      parseClaim({
+        ...validVds,
+        key: { match: { vds: '*G' } },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('accepts well-formed unknown attribute names', () => {
+    expect(
+      parseClaim({
+        ...validVds,
+        value: { attribute: 'customAttr', code: 'X' },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('rejects invalid attribute format', () => {
+    expect(parseClaim({ ...validVds, value: { attribute: 'Model', code: '308' } }).ok).toBe(false);
+    expect(parseClaim({ ...validVds, value: { attribute: 'bad-format', code: '308' } }).ok).toBe(
+      false,
+    );
+    expect(parseClaim({ ...validVds, value: { attribute: '', code: '308' } }).ok).toBe(false);
   });
 
   it('rejects invalid cycleRule', () => {

@@ -62,12 +62,22 @@ describe('golden fixture generator', () => {
   it('matches committed golden hashes', () => {
     const { privateKey, unsigned, hashes } = golden;
     const wmi = signClaim(unsigned.wmi, privateKey);
-    const vds = signClaim(unsigned.vdsPattern, privateKey);
+    const vdsSchema = signClaim(unsigned.vdsSchema, privateKey);
+    const vdsBinding = signClaim(unsigned.vdsBinding, privateKey);
+    const vdsPattern = signClaim(unsigned.vdsPattern, privateKey);
     const year = signClaim(unsigned.yearHint, privateKey);
-    const claims = [claimHash(wmi), claimHash(vds), claimHash(year)].sort();
+    const claims = [
+      claimHash(wmi),
+      claimHash(vdsSchema),
+      claimHash(vdsBinding),
+      claimHash(vdsPattern),
+      claimHash(year),
+    ].sort();
     const manifest = signManifest({ ...unsigned.manifest, claims }, privateKey);
     expect(claimHash(wmi)).toBe(hashes.wmi);
-    expect(claimHash(vds)).toBe(hashes.vdsPattern);
+    expect(claimHash(vdsSchema)).toBe(hashes.vdsSchema);
+    expect(claimHash(vdsBinding)).toBe(hashes.vdsBinding);
+    expect(claimHash(vdsPattern)).toBe(hashes.vdsPattern);
     expect(claimHash(year)).toBe(hashes.yearHint);
     expect(manifest.claims).toEqual(claims);
     expect(golden.signed).toBeDefined();

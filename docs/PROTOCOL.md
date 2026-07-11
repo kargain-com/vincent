@@ -1,6 +1,6 @@
 # Vincent protocol
 
-**Version:** 0.1 (draft)
+**Version:** 1.1
 **Status:** normative for all Vincent implementations once merged; breaking changes require a new `schemaVersion`.
 
 Vincent is an open protocol for community-curated vehicle identification (VIN) data. It defines how facts about VIN encoding are contributed, reviewed, compiled into datasets, and anchored — so that any client can decode VINs offline and verify every byte it relies on.
@@ -34,16 +34,16 @@ These hold for every version of the protocol. A change that violates one of them
 
 ## 4. Claims
 
-### 4.1 Wire format (`schemaVersion: "1.0"`)
+### 4.1 Wire format
 
 ```jsonc
 {
-  "schemaVersion": "1.0",
-  "type": "wmi" | "vds-pattern" | "year-hint",
+  "schemaVersion": "1.0" | "1.1",          // per claim type, see 4.2 and 4.5
+  "type": "wmi" | "vds-schema" | "vds-binding" | "vds-pattern" | "year-hint",
   "key": { /* type-specific, see 4.2 */ },
   "value": { /* type-specific, see 4.2 */ },
   "evidence": ["ar://<txid>", ...],        // optional
-  "provenance": "<taxonomy, see 4.3>",
+  "provenance": "<taxonomy, see 4.6>",
   "license": "CC0-1.0",                    // literal, required
   "supersedes": "sha256:...",              // optional: claim being corrected
   "contributor": "0x...",                  // EIP-55 checksummed address
@@ -51,37 +51,121 @@ These hold for every version of the protocol. A change that violates one of them
 }
 ```
 
-Unknown top-level keys are invalid in v1.0 (fail closed). Empty optional keys are omitted, never null.
+Unknown top-level keys are invalid (fail closed). Empty optional keys are omitted, never null. Required-nullable keys (currently only `vds-binding.key.yearTo`) are always present; `null` is a meaningful value (open-ended year range) and is included in canonical form.
+
+Manifests use `schemaVersion: "1.0"` (see section 7.1). A manifest may reference claims with mixed claim `schemaVersion` minors under major 1; each claim self-describes.
 
 ### 4.2 Claim types
 
-**`wmi`** — maps a World Manufacturer Identifier to identity attributes.
+**`wmi`** (`schemaVersion: "1.0"`) — maps a World Manufacturer Identifier to identity attributes.
 
 ```jsonc
 "key":   { "wmi": "VF3" },
 "value": { "manufacturer": "Peugeot", "country": "FR", "region": "EU" }
 ```
 
-**`vds-pattern`** — maps a VDS pattern to one vehicle attribute.
+**`vds-schema`** (`schemaVersion: "1.1"`) — declares a coding schema. Its `claimHash` is the schema's stable reference used by patterns and bindings. The declaration is intentionally minimal so its identity is stable — descriptive fields only, no patterns inside.
 
 ```jsonc
-"key":   { "wmi": "VF3", "positions": "4-8", "pattern": "LC***" },
-"value": { "attribute": "model", "code": "308" }
+{
+  "schemaVersion": "1.1",
+  "type": "vds-schema",
+  "key": { "name": "Ford car 2011 (vPIC 2225)" },   // descriptive; identity = claimHash
+  "value": {},                                       // reserved; empty object in 1.1
+  "provenance": "regulatory/us-vpic",
+  "license": "CC0-1.0",
+  "contributor": "0x...",
+  "signature": "0x..."
+}
 ```
 
-- `positions`: inclusive 1-based range within positions 4–8.
-- `pattern`: characters from the VIN alphabet plus `*` wildcard; length equals the range length.
-- `attribute`: one of the canonical attribute enum — `model`, `series`, `bodyType`, `fuelType`, `driveType`, `transmission`, `engine`, `restraint`, `gvwrClass`, `plant`. Values are canonical English codes; localization is a client concern.
+**`vds-binding`** (`schemaVersion: "1.1"`) — binds a WMI and model-year range to a schema.
+
+```jsonc
+{
+  "schemaVersion": "1.1",
+  "type": "vds-binding",
+  "key": {
+    "wmi": "1FA",                 // 3- or 6-char WMI
+    "yearFrom": 2011,             // inclusive model year
+    "yearTo": 2011,               // inclusive; null = open-ended (still current)
+    "schema": "sha256:..."        // a vds-schema claimHash
+  },
+  "value": {},                    // reserved; empty in 1.1
+  "provenance": "regulatory/us-vpic",
+  "license": "CC0-1.0",
+  "supersedes": "sha256:...",     // optional — e.g. correcting a year range
+  "contributor": "0x...",
+  "signature": "0x..."
+}
+```
+
+**`vds-pattern`** (`schemaVersion: "1.1"`) — a single decode rule inside a schema. One claim = one attribute.
+
+```jsonc
+{
+  "schemaVersion": "1.1",
+  "type": "vds-pattern",
+  "key": {
+    "schema": "sha256:...",       // a vds-schema claimHash
+    "match": {
+      "vds": "**BB",              // matches positions 4–8; grammar in 4.3
+      "vis": "*G"                 // OPTIONAL; matches positions 10.. ; omit if unused
+    }
+  },
+  "value": { "attribute": "model", "code": "Fusion" },
+  "evidence": ["ar://..."],       // optional
+  "provenance": "regulatory/us-vpic",
+  "license": "CC0-1.0",
+  "supersedes": "sha256:...",     // optional — corrects a pattern for ALL bound WMIs
+  "contributor": "0x...",
+  "signature": "0x..."
+}
+```
+
+- `attribute`: a well-formed camelCase token (validated at parse time). The genesis profile registry of recognized attributes is: `model`, `series`, `bodyType`, `fuelType`, `driveType`, `transmission`, `engine`, `engineCylinders`, `displacementL`, `plant`. The schema does not forbid deeper attributes; the community may add them later without another version bump. Vocabulary consistency is enforced by review, not by a closed parser enum.
+- `value.code` — canonical English code for enumerated attributes; the literal published string for free values (engine model, plant city), provenance-tagged.
 - One claim = one attribute. Compound statements are multiple claims.
 
-**`year-hint`** — declares how a WMI resolves the 30-year model-year cycle (e.g., "position 7 numeric ⇒ 2010+ does not apply to this WMI").
+**`year-hint`** (`schemaVersion: "1.0"`) — declares how a WMI resolves the 30-year model-year cycle (e.g., "position 7 numeric ⇒ 2010+ does not apply to this WMI"). Pairs with `vds-binding` year ranges for ISO-ambiguous WMIs.
 
 ```jsonc
 "key":   { "wmi": "VF3" },
 "value": { "cycleRule": "iso-unreliable" | "na-standard" }
 ```
 
-### 4.3 Provenance taxonomy
+### 4.3 Match grammar
+
+A match segment is evaluated left-to-right against consecutive VIN positions:
+
+- Literal VIN char (`A`–`Z` except I/O/Q, `0`–`9`) — the position must equal it.
+- `*` — matches exactly one position (any allowed char).
+- `[...]` — character class; matches one position that is any listed char; ranges via `-` allowed (`[0-9]`). No negation in 1.1.
+- A segment need not cover all remaining positions; unspecified trailing positions are unconstrained.
+
+Anchoring: `match.vds` at position 4; `match.vis` at position 10 (when present). A claim matches a VIN when every present segment matches.
+
+Resolution when several patterns match: existing epoch rules only (supersession → review weight → anchoring order; section 7.2). Specificity does NOT auto-win — conflicts are resolved at review time and recorded, never guessed by the decoder.
+
+### 4.4 Decoder resolution
+
+Given a VIN and a model year, over the compiled accepted claim set:
+
+1. Resolve WMI (3-char, or 6-char when position 3 = "9") → `wmi` attributes.
+2. Find `vds-binding` claims for that WMI whose `[yearFrom, yearTo]` contains the year (`null` `yearTo` = open). Collect their `schema` refs.
+3. For each bound schema, select `vds-pattern` claims whose `match` applies to the VIN. Emit their attribute/value pairs.
+4. The matcher is pure and total: same (VIN, year, claim set) ⇒ same result.
+
+Decoder implementation is specified here; reference matcher ships in a later phase.
+
+### 4.5 VDS compatibility and versioning
+
+- The VDS claim types (`vds-schema`, `vds-binding`, `vds-pattern`) use `schemaVersion: "1.1"`. `wmi` and `year-hint` stay `"1.0"`. A manifest may mix claim schemaVersions; each claim self-describes.
+- Parsers reject unknown majors; 1.0 and 1.1 share major 1, both readable (section 10).
+- No pre-existing v1.0 `vds-pattern` data exists, so no migration is needed.
+- Old epochs remain readable forever (section 10).
+
+### 4.6 Provenance taxonomy
 
 - `regulatory/us-vpic` — imported from the NHTSA vPIC corpus (public domain).
 - `community/observation` — derived from physical inspection of a real vehicle.
@@ -90,13 +174,13 @@ Unknown top-level keys are invalid in v1.0 (fail closed). Empty optional keys ar
 
 Clients and compilers MUST preserve provenance; consumers choose their own trust thresholds per provenance class.
 
-### 4.4 Evidence rules
+### 4.7 Evidence rules
 
 - Evidence is optional for `regulatory/*` and `oem`, expected for `community/*`.
 - Evidence MUST NOT contain: full VINs (serial positions 12–17 masked), geolocation metadata, faces, license plates, or any personal data.
 - Uploading evidence constitutes its CC0 dedication (the `license` field covers the entire claim document including evidence).
 
-### 4.5 Privacy
+### 4.8 Privacy
 
 Claims derived from real transactions (e.g., marketplace verifications) MUST be batched and published with randomized delay, and MUST NOT carry timestamps of the underlying event. The claim's only time reference is its anchoring order.
 
@@ -162,6 +246,7 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 ## 10. Versioning
 
 - `schemaVersion` follows the wire documents, not the packages. Parsers MUST reject documents with an unknown major version and MUST NOT guess.
+- Major version 1 accepts claim minors `"1.0"` and `"1.1"`; each claim type declares its required minor (see section 4.2).
 - Old epochs remain readable forever: compilers and decoders keep read support for all released major versions.
 
 ## 11. Security considerations

@@ -19,6 +19,16 @@ describe('hash', () => {
     expect(claimHash(signed)).toBe(hashes.wmi);
   });
 
+  it('claimHash is stable for vds-schema fixture', () => {
+    const signed = signClaim(unsigned.vdsSchema, privateKey);
+    expect(claimHash(signed)).toBe(hashes.vdsSchema);
+  });
+
+  it('claimHash is stable for vds-binding fixture', () => {
+    const signed = signClaim(unsigned.vdsBinding, privateKey);
+    expect(claimHash(signed)).toBe(hashes.vdsBinding);
+  });
+
   it('claimHash is stable for vds-pattern fixture', () => {
     const signed = signClaim(unsigned.vdsPattern, privateKey);
     expect(claimHash(signed)).toBe(hashes.vdsPattern);
@@ -31,9 +41,17 @@ describe('hash', () => {
 
   it('manifestHash is stable for genesis manifest fixture', () => {
     const wmi = signClaim(unsigned.wmi, privateKey);
-    const vds = signClaim(unsigned.vdsPattern, privateKey);
+    const vdsSchema = signClaim(unsigned.vdsSchema, privateKey);
+    const vdsBinding = signClaim(unsigned.vdsBinding, privateKey);
+    const vdsPattern = signClaim(unsigned.vdsPattern, privateKey);
     const year = signClaim(unsigned.yearHint, privateKey);
-    const claims = [claimHash(wmi), claimHash(vds), claimHash(year)].sort();
+    const claims = [
+      claimHash(wmi),
+      claimHash(vdsSchema),
+      claimHash(vdsBinding),
+      claimHash(vdsPattern),
+      claimHash(year),
+    ].sort();
     const signed = signManifest({ ...unsigned.manifest, claims }, privateKey);
     expect(manifestHash(signed)).toBe(hashes.manifest);
   });

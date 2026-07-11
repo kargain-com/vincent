@@ -16,19 +16,44 @@
       "provenance": "regulatory/us-vpic",
       "license": "CC0-1.0"
     },
+    "vdsSchema": {
+      "schemaVersion": "1.1",
+      "type": "vds-schema",
+      "key": {
+        "name": "Ford car 2011 (vPIC 2225)"
+      },
+      "value": {},
+      "provenance": "regulatory/us-vpic",
+      "license": "CC0-1.0"
+    },
+    "vdsBinding": {
+      "schemaVersion": "1.1",
+      "type": "vds-binding",
+      "key": {
+        "wmi": "1FA",
+        "yearFrom": 2011,
+        "yearTo": 2011,
+        "schema": "sha256:b34845a1be5d137623f576837efd429fd89f40d4a8c7a7d06da7e0f69e0ba538"
+      },
+      "value": {},
+      "provenance": "regulatory/us-vpic",
+      "license": "CC0-1.0"
+    },
     "vdsPattern": {
-      "schemaVersion": "1.0",
+      "schemaVersion": "1.1",
       "type": "vds-pattern",
       "key": {
-        "wmi": "VF3",
-        "positions": "4-8",
-        "pattern": "LC***"
+        "schema": "sha256:b34845a1be5d137623f576837efd429fd89f40d4a8c7a7d06da7e0f69e0ba538",
+        "match": {
+          "vds": "**BB",
+          "vis": "*G"
+        }
       },
       "value": {
         "attribute": "model",
-        "code": "308"
+        "code": "Fusion"
       },
-      "provenance": "community/document",
+      "provenance": "regulatory/us-vpic",
       "license": "CC0-1.0",
       "evidence": [
         "ar://abc123"
@@ -71,9 +96,11 @@
   },
   "hashes": {
     "wmi": "sha256:069a73fecdf00f6d74cef8b26e8d841fc63889bf18a07549607b9c204d6f36d2",
-    "vdsPattern": "sha256:9dff719b4fe043a2a678da2f914d0fbbd692c43dbd7a17232581f5993a6be99e",
+    "vdsSchema": "sha256:b34845a1be5d137623f576837efd429fd89f40d4a8c7a7d06da7e0f69e0ba538",
+    "vdsBinding": "sha256:65c7439ff93203892bc8a2e3947effdb973f3e57856b7073afa26b8ce6d5d488",
+    "vdsPattern": "sha256:531996762aa4a5ecd66bcc46f4b300b38e3431313ffd5bc63fd55903c615f000",
     "yearHint": "sha256:0c6a24a26ad221f9b6209b64253565878bc1c7a76f7454e0a0c0fb49c88abab6",
-    "manifest": "sha256:a01d38228abaea3f325472fb7cf8c89de5b9a4ca9c6df277c90bb10154a662ba"
+    "manifest": "sha256:c64d7d19ed1ab73b3fe04c94cac3cb7ed3f17cfcaa17f14cdf62698244bd164d"
   },
   "signed": {
     "wmi": {
@@ -92,25 +119,54 @@
       "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
       "signature": "0xd3cc125d386f601d4a66374773e8df7c8c8f0572f8afa77804d0c9a6c10202c8112cb52c3cbba33512891575a9f4e3936ccc948cb0017ad33103dda13b509ca71b"
     },
+    "vdsSchema": {
+      "schemaVersion": "1.1",
+      "type": "vds-schema",
+      "key": {
+        "name": "Ford car 2011 (vPIC 2225)"
+      },
+      "value": {},
+      "provenance": "regulatory/us-vpic",
+      "license": "CC0-1.0",
+      "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+      "signature": "0x6667b18089e757d2754c7f3b19e0d1d52ed8dc854ce851a3d599ccba7d45cbac683e3eb1f3b4b103e5c574fc85e83ba753a5dd804854feb73d75ef95b9fa377a1c"
+    },
+    "vdsBinding": {
+      "schemaVersion": "1.1",
+      "type": "vds-binding",
+      "key": {
+        "wmi": "1FA",
+        "yearFrom": 2011,
+        "yearTo": 2011,
+        "schema": "sha256:b34845a1be5d137623f576837efd429fd89f40d4a8c7a7d06da7e0f69e0ba538"
+      },
+      "value": {},
+      "provenance": "regulatory/us-vpic",
+      "license": "CC0-1.0",
+      "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+      "signature": "0x717f0223ffcf7913a470490ceb3d9ac30dfa2ca1d563b9731418ddef31d2d3c434f68a5d75f7c7e9f334d3066c184ce041ec163f034faaeaf30ab8098b8cdaf61b"
+    },
     "vdsPattern": {
-      "schemaVersion": "1.0",
+      "schemaVersion": "1.1",
       "type": "vds-pattern",
       "key": {
-        "wmi": "VF3",
-        "positions": "4-8",
-        "pattern": "LC***"
+        "schema": "sha256:b34845a1be5d137623f576837efd429fd89f40d4a8c7a7d06da7e0f69e0ba538",
+        "match": {
+          "vds": "**BB",
+          "vis": "*G"
+        }
       },
       "value": {
         "attribute": "model",
-        "code": "308"
+        "code": "Fusion"
       },
-      "provenance": "community/document",
+      "provenance": "regulatory/us-vpic",
       "license": "CC0-1.0",
       "evidence": [
         "ar://abc123"
       ],
       "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-      "signature": "0x075c9ac4491f0012e645074b7cbe6250d9719fe398510449c2ddab61c3cbc02114971826d8117e8a68b0f8f2e9a8724821d3da76ca435f8496fc93025d223c3f1c"
+      "signature": "0xf9ddba715bff118563fab6d6cf544bbe124fb5563a0c0115293f499d19295c2375cd33b2ac0724fd31071a01606486730189d6895e3cbe465e40d335d86d54a31b"
     },
     "yearHint": {
       "schemaVersion": "1.0",
@@ -138,7 +194,9 @@
       "claims": [
         "sha256:069a73fecdf00f6d74cef8b26e8d841fc63889bf18a07549607b9c204d6f36d2",
         "sha256:0c6a24a26ad221f9b6209b64253565878bc1c7a76f7454e0a0c0fb49c88abab6",
-        "sha256:9dff719b4fe043a2a678da2f914d0fbbd692c43dbd7a17232581f5993a6be99e"
+        "sha256:531996762aa4a5ecd66bcc46f4b300b38e3431313ffd5bc63fd55903c615f000",
+        "sha256:65c7439ff93203892bc8a2e3947effdb973f3e57856b7073afa26b8ce6d5d488",
+        "sha256:b34845a1be5d137623f576837efd429fd89f40d4a8c7a7d06da7e0f69e0ba538"
       ],
       "compiler": {
         "name": "vincent-compiler",
@@ -152,7 +210,7 @@
         ]
       },
       "publisher": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-      "signature": "0x7e09ddcabee91b5bd82935856ec36a0704f7cf529a3cc1d54d601f8703438041620f8d94d35bc1aeb4b33152dea75dbd33bb8e18ad5a9d4fe2dab0020242f8911b"
+      "signature": "0x91b96b668f736c31b05a3e047763b119c5c89d96b2719d5ac5d012e475d878926253ba00a0b5fb101a637b2b53c20addbc968a1cf622d779dc1463e443d93e661b"
     }
   }
 }

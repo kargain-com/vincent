@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { CanonicalizeError, canonicalize } from '../../src/protocol/canonicalize.js';
 import { parseClaim } from '../../src/protocol/parse-claim.js';
+import { parseMatchExpression } from '../../src/protocol/parse-match.js';
 import { parseManifest } from '../../src/protocol/parse-manifest.js';
-import { parsePositions } from '../../src/protocol/parse-utils.js';
+import {
+  parseBindingWmi,
+  parseClaimSchemaVersion,
+  parseEmptyObject,
+  parseModelYear,
+  parseYearTo,
+} from '../../src/protocol/parse-utils.js';
 import golden from './fixtures/golden.json';
 
 describe('protocol coverage edges', () => {
@@ -36,8 +43,8 @@ describe('protocol coverage edges', () => {
     expect(parseManifest({ ...golden.signed.manifest, schemaVersion: 1 }).ok).toBe(false);
   });
 
-  it('parses unsupported minor schema versions', () => {
-    expect(parseClaim({ ...golden.signed.wmi, schemaVersion: '1.1' }).ok).toBe(false);
+  it('rejects wrong schemaVersion for vds-schema', () => {
+    expect(parseClaim({ ...golden.signed.vdsSchema, schemaVersion: '1.0' }).ok).toBe(false);
   });
 
   it('parses invalid evidence container type', () => {
@@ -75,11 +82,11 @@ describe('protocol coverage edges', () => {
     ).toBe(false);
   });
 
-  it('parses invalid vds key object', () => {
+  it('parses invalid vds-pattern key object', () => {
     expect(parseClaim({ ...golden.signed.vdsPattern, key: null }).ok).toBe(false);
   });
 
-  it('parses unknown vds key fields', () => {
+  it('parses unknown vds-pattern key fields', () => {
     expect(
       parseClaim({
         ...golden.signed.vdsPattern,
@@ -88,20 +95,53 @@ describe('protocol coverage edges', () => {
     ).toBe(false);
   });
 
-  it('parses missing vds positions key', () => {
+  it('parses missing vds-pattern schema key', () => {
     expect(
       parseClaim({
         ...golden.signed.vdsPattern,
-        key: { wmi: 'VF3', pattern: 'LC***' },
+        key: { match: { vds: '*G' } },
       }).ok,
     ).toBe(false);
   });
 
-  it('parses invalid vds key wmi code', () => {
+  it('parses invalid vds-pattern schema hash', () => {
     expect(
       parseClaim({
         ...golden.signed.vdsPattern,
-        key: { ...golden.signed.vdsPattern.key, wmi: 'VF!' },
+        key: { ...golden.signed.vdsPattern.key, schema: 'bad' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('parses invalid match object type', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsPattern,
+        key: { schema: golden.signed.vdsPattern.key.schema, match: 'bad' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('parses non-string match.vds', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsPattern,
+        key: {
+          schema: golden.signed.vdsPattern.key.schema,
+          match: { vds: 123 },
+        },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('parses non-string match.vis', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsPattern,
+        key: {
+          schema: golden.signed.vdsPattern.key.schema,
+          match: { vds: '*G', vis: 1 },
+        },
       }).ok,
     ).toBe(false);
   });
@@ -110,20 +150,20 @@ describe('protocol coverage edges', () => {
     expect(parseClaim({ ...golden.signed.yearHint, value: {} }).ok).toBe(false);
   });
 
-  it('parses invalid vds value object', () => {
+  it('parses invalid vds-pattern value object', () => {
     expect(parseClaim({ ...golden.signed.vdsPattern, value: null }).ok).toBe(false);
   });
 
-  it('parses unknown vds value keys', () => {
+  it('parses unknown vds-pattern value keys', () => {
     expect(
       parseClaim({
         ...golden.signed.vdsPattern,
-        value: { attribute: 'model', code: '308', extra: 'x' },
+        value: { attribute: 'model', code: 'Fusion', extra: 'x' },
       }).ok,
     ).toBe(false);
   });
 
-  it('parses missing vds value code key', () => {
+  it('parses missing vds-pattern value code key', () => {
     expect(parseClaim({ ...golden.signed.vdsPattern, value: { attribute: 'model' } }).ok).toBe(
       false,
     );
@@ -164,18 +204,10 @@ describe('protocol coverage edges', () => {
     expect(parseClaim({ ...golden.signed.yearHint, key: null }).ok).toBe(false);
   });
 
-  it('parses invalid vds pattern type', () => {
+  it('parses invalid vds-pattern code value', () => {
     expect(
-      parseClaim({
-        ...golden.signed.vdsPattern,
-        key: { ...golden.signed.vdsPattern.key, pattern: 123 },
-      }).ok,
+      parseClaim({ ...golden.signed.vdsPattern, value: { attribute: 'model', code: '' } }).ok,
     ).toBe(false);
-  });
-
-  it('parses invalid vds code value', () => {
-    expect(parseClaim({ ...golden.signed.vdsPattern, value: { attribute: 'model', code: '' } }).ok)
-      .toBe(false);
   });
 
   it('parses missing wmi key property', () => {
@@ -186,17 +218,42 @@ describe('protocol coverage edges', () => {
     expect(parseClaim({ ...golden.signed.wmi, key: { wmi: 123 } }).ok).toBe(false);
   });
 
-  it('parses non-string positions directly', () => {
-    expect(parsePositions(4).ok).toBe(false);
+  it('parses missing vds-schema name key', () => {
+    expect(parseClaim({ ...golden.signed.vdsSchema, key: {} }).ok).toBe(false);
   });
 
-  it('parses inverted vds positions range', () => {
+  it('parses invalid vds-schema key object', () => {
+    expect(parseClaim({ ...golden.signed.vdsSchema, key: null }).ok).toBe(false);
+  });
+
+  it('parses invalid vds-binding key object', () => {
+    expect(parseClaim({ ...golden.signed.vdsBinding, key: null }).ok).toBe(false);
+  });
+
+  it('parses missing vds-binding yearTo key', () => {
     expect(
       parseClaim({
-        ...golden.signed.vdsPattern,
-        key: { ...golden.signed.vdsPattern.key, positions: '8-4' },
+        ...golden.signed.vdsBinding,
+        key: {
+          wmi: '1FA',
+          yearFrom: 2011,
+          schema: golden.signed.vdsBinding.key.schema,
+        },
       }).ok,
     ).toBe(false);
+  });
+
+  it('parses invalid binding wmi character', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsBinding,
+        key: { ...golden.signed.vdsBinding.key, wmi: '1F!' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('parses non-empty vds-binding value', () => {
+    expect(parseClaim({ ...golden.signed.vdsBinding, value: { x: 1 } }).ok).toBe(false);
   });
 
   it('parses invalid manifest parent hash', () => {
@@ -291,5 +348,91 @@ describe('protocol coverage edges', () => {
         dataset: { ...golden.signed.manifest.dataset, sqliteSha256: '' },
       }).ok,
     ).toBe(false);
+  });
+
+  it('covers parseClaimSchemaVersion major rejection', () => {
+    expect(parseClaimSchemaVersion('2.0', 'wmi').ok).toBe(false);
+  });
+
+  it('covers parseBindingWmi invalid length', () => {
+    expect(parseBindingWmi('AB', 'wmi').ok).toBe(false);
+  });
+
+  it('covers parseModelYear non-number', () => {
+    expect(parseModelYear('2011', 'yearFrom').ok).toBe(false);
+  });
+
+  it('covers parseYearTo invalid value', () => {
+    expect(parseYearTo('open').ok).toBe(false);
+  });
+
+  it('covers parseEmptyObject non-object', () => {
+    expect(parseEmptyObject(null, 'value').ok).toBe(false);
+  });
+
+  it('parses vds-pattern without vis segment', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsPattern,
+        key: {
+          schema: golden.signed.vdsPattern.key.schema,
+          match: { vds: '*G' },
+        },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('parses missing match vds key', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsPattern,
+        key: {
+          schema: golden.signed.vdsPattern.key.schema,
+          match: { vis: '*G' },
+        },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('parses invalid vis match segment', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsPattern,
+        key: {
+          schema: golden.signed.vdsPattern.key.schema,
+          match: { vds: '*G', vis: 'a*' },
+        },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('parses invalid yearTo value in binding', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsBinding,
+        key: { ...golden.signed.vdsBinding.key, yearTo: 2011.5 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects manifest schemaVersion 1.1', () => {
+    expect(parseManifest({ ...golden.signed.manifest, schemaVersion: '1.1' }).ok).toBe(false);
+  });
+
+  it('covers parseBindingWmi empty string', () => {
+    expect(parseBindingWmi('', 'wmi').ok).toBe(false);
+  });
+
+  it('parses unknown vds-binding key fields', () => {
+    expect(
+      parseClaim({
+        ...golden.signed.vdsBinding,
+        key: { ...golden.signed.vdsBinding.key, extra: 'x' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('covers parseMatchExpression invalid vds', () => {
+    expect(parseMatchExpression({ vds: 'a*' }).ok).toBe(false);
   });
 });

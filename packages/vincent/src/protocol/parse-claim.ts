@@ -2,6 +2,7 @@ import {
   CLAIM_REQUIRED_KEYS,
   CLAIM_TOP_LEVEL_KEYS,
 } from './constants.js';
+import { parseMatchSegment } from './parse-match.js';
 import {
   checkObjectKeys,
   checkRequiredKeys,
@@ -9,35 +10,41 @@ import {
   fail,
   isPlainObject,
   parseAddress,
+  parseAttributeName,
+  parseBindingWmi,
+  parseClaimSchemaVersion,
   parseClaimType,
   parseCycleRule,
+  parseEmptyObject,
   parseEvidence,
+  parseModelYear,
   parsePlainObject,
-  parsePositions,
   parseProvenance,
-  parseSchemaVersion,
   parseSha256Hash,
   parseSignature,
-  parseVehicleAttribute,
-  parseVdsPattern,
   parseWmiCode,
   parseNonEmptyString,
+  parseYearTo,
   rejectNullOptional,
 } from './parse-utils.js';
 import type {
   Claim,
   CycleRule,
   ParseResult,
-  VehicleAttribute,
+  VdsBindingClaim,
   VdsPatternClaim,
+  VdsSchemaClaim,
   WmiClaim,
   YearHintClaim,
 } from './types.js';
 
 const WMI_KEY_KEYS = new Set(['wmi']);
 const WMI_VALUE_KEYS = new Set(['manufacturer', 'country', 'region']);
-const VDS_KEY_KEYS = new Set(['wmi', 'positions', 'pattern']);
-const VDS_VALUE_KEYS = new Set(['attribute', 'code']);
+const VDS_SCHEMA_KEY_KEYS = new Set(['name']);
+const VDS_BINDING_KEY_KEYS = new Set(['wmi', 'yearFrom', 'yearTo', 'schema']);
+const VDS_PATTERN_KEY_KEYS = new Set(['schema', 'match']);
+const VDS_PATTERN_MATCH_KEYS = new Set(['vds', 'vis']);
+const VDS_PATTERN_VALUE_KEYS = new Set(['attribute', 'code']);
 const YEAR_VALUE_KEYS = new Set(['cycleRule']);
 
 function parseWmiKey(value: unknown): ParseResult<{ wmi: string }> {
@@ -99,62 +106,155 @@ function parseWmiValue(value: unknown): ParseResult<{
   };
 }
 
-function parseVdsKey(value: unknown): ParseResult<{
+function parseVdsSchemaKey(value: unknown): ParseResult<{ name: string }> {
+  const obj = parsePlainObject(value, 'key');
+  if (!obj.ok) {
+    return obj;
+  }
+  const keys = checkObjectKeys(obj.value, VDS_SCHEMA_KEY_KEYS, 'key');
+  if (!keys.ok) {
+    return keys;
+  }
+  if (!('name' in obj.value)) {
+    return fail('missing-key:name', 'Missing required key in key: name');
+  }
+  const name = parseNonEmptyString(obj.value.name, 'name');
+  if (!name.ok) {
+    return name;
+  }
+  return { ok: true, value: { name: name.value } };
+}
+
+function parseVdsBindingKey(value: unknown): ParseResult<{
   wmi: string;
-  positions: string;
-  pattern: string;
+  yearFrom: number;
+  yearTo: number | null;
+  schema: string;
 }> {
   const obj = parsePlainObject(value, 'key');
   if (!obj.ok) {
     return obj;
   }
-  const keys = checkObjectKeys(obj.value, VDS_KEY_KEYS, 'key');
+  const keys = checkObjectKeys(obj.value, VDS_BINDING_KEY_KEYS, 'key');
   if (!keys.ok) {
     return keys;
   }
-  for (const key of VDS_KEY_KEYS) {
+  for (const key of VDS_BINDING_KEY_KEYS) {
     if (!(key in obj.value)) {
       return fail(`missing-key:${key}`, `Missing required key in key: ${key}`);
     }
   }
-  const wmi = parseWmiCode(obj.value.wmi, 'wmi');
+  const wmi = parseBindingWmi(obj.value.wmi, 'wmi');
   if (!wmi.ok) {
     return wmi;
   }
-  const positions = parsePositions(obj.value.positions);
-  if (!positions.ok) {
-    return positions;
+  const yearFrom = parseModelYear(obj.value.yearFrom, 'yearFrom');
+  if (!yearFrom.ok) {
+    return yearFrom;
   }
-  const rangeLength = positions.value.end - positions.value.start + 1;
-  const pattern = parseVdsPattern(obj.value.pattern, rangeLength);
-  if (!pattern.ok) {
-    return pattern;
+  const yearTo = parseYearTo(obj.value.yearTo);
+  if (!yearTo.ok) {
+    return yearTo;
+  }
+  if (yearTo.value !== null && yearFrom.value > yearTo.value) {
+    return fail('invalid-year-range', 'yearFrom must not exceed yearTo');
+  }
+  const schema = parseSha256Hash(obj.value.schema, 'schema');
+  if (!schema.ok) {
+    return schema;
   }
   return {
     ok: true,
     value: {
       wmi: wmi.value,
-      positions: obj.value.positions as string,
-      pattern: pattern.value,
+      yearFrom: yearFrom.value,
+      yearTo: yearTo.value,
+      schema: schema.value,
     },
   };
 }
 
-function parseVdsValue(value: unknown): ParseResult<{ attribute: string; code: string }> {
+function parseVdsPatternMatch(value: unknown): ParseResult<{ vds: string; vis?: string }> {
+  const obj = parsePlainObject(value, 'match');
+  if (!obj.ok) {
+    return obj;
+  }
+  const keys = checkObjectKeys(obj.value, VDS_PATTERN_MATCH_KEYS, 'match');
+  if (!keys.ok) {
+    return keys;
+  }
+  if (!('vds' in obj.value)) {
+    return fail('missing-key:vds', 'Missing required key in match: vds');
+  }
+  if (typeof obj.value.vds !== 'string') {
+    return fail('invalid-match', 'match.vds must be a string');
+  }
+  const vds = parseMatchSegment(obj.value.vds);
+  if (!vds.ok) {
+    return vds;
+  }
+  if ('vis' in obj.value) {
+    if (typeof obj.value.vis !== 'string') {
+      return fail('invalid-match', 'match.vis must be a string');
+    }
+    const vis = parseMatchSegment(obj.value.vis);
+    if (!vis.ok) {
+      return vis;
+    }
+    return { ok: true, value: { vds: obj.value.vds, vis: obj.value.vis } };
+  }
+  return { ok: true, value: { vds: obj.value.vds } };
+}
+
+function parseVdsPatternKey(value: unknown): ParseResult<{
+  schema: string;
+  match: { vds: string; vis?: string };
+}> {
+  const obj = parsePlainObject(value, 'key');
+  if (!obj.ok) {
+    return obj;
+  }
+  const keys = checkObjectKeys(obj.value, VDS_PATTERN_KEY_KEYS, 'key');
+  if (!keys.ok) {
+    return keys;
+  }
+  for (const key of VDS_PATTERN_KEY_KEYS) {
+    if (!(key in obj.value)) {
+      return fail(`missing-key:${key}`, `Missing required key in key: ${key}`);
+    }
+  }
+  const schema = parseSha256Hash(obj.value.schema, 'schema');
+  if (!schema.ok) {
+    return schema;
+  }
+  const match = parseVdsPatternMatch(obj.value.match);
+  if (!match.ok) {
+    return match;
+  }
+  return {
+    ok: true,
+    value: {
+      schema: schema.value,
+      match: match.value,
+    },
+  };
+}
+
+function parseVdsPatternValue(value: unknown): ParseResult<{ attribute: string; code: string }> {
   const obj = parsePlainObject(value, 'value');
   if (!obj.ok) {
     return obj;
   }
-  const keys = checkObjectKeys(obj.value, VDS_VALUE_KEYS, 'value');
+  const keys = checkObjectKeys(obj.value, VDS_PATTERN_VALUE_KEYS, 'value');
   if (!keys.ok) {
     return keys;
   }
-  for (const key of VDS_VALUE_KEYS) {
+  for (const key of VDS_PATTERN_VALUE_KEYS) {
     if (!(key in obj.value)) {
       return fail(`missing-key:${key}`, `Missing required key in value: ${key}`);
     }
   }
-  const attribute = parseVehicleAttribute(obj.value.attribute);
+  const attribute = parseAttributeName(obj.value.attribute);
   if (!attribute.ok) {
     return attribute;
   }
@@ -213,18 +313,18 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
     }
   }
 
-  const schemaVersion = parseSchemaVersion(json.schemaVersion);
+  const claimType = parseClaimType(json.type);
+  if (!claimType.ok) {
+    return claimType;
+  }
+
+  const schemaVersion = parseClaimSchemaVersion(json.schemaVersion, claimType.value);
   if (!schemaVersion.ok) {
     return schemaVersion;
   }
 
   if (json.license !== 'CC0-1.0') {
     return fail('invalid-license', 'license must be CC0-1.0');
-  }
-
-  const claimType = parseClaimType(json.type);
-  if (!claimType.ok) {
-    return claimType;
   }
 
   const provenance = parseProvenance(json.provenance);
@@ -256,8 +356,18 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
     supersedes = hash.value;
   }
 
-  const base = {
-    schemaVersion: schemaVersion.value,
+  const baseV10 = {
+    schemaVersion: '1.0' as const,
+    provenance: provenance.value,
+    license: 'CC0-1.0' as const,
+    contributor: contributor.value,
+    signature: signature.value,
+    ...(evidence.value !== undefined ? { evidence: evidence.value } : {}),
+    ...(supersedes !== undefined ? { supersedes } : {}),
+  };
+
+  const baseV11 = {
+    schemaVersion: '1.1' as const,
     provenance: provenance.value,
     license: 'CC0-1.0' as const,
     contributor: contributor.value,
@@ -278,28 +388,63 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
       }
       return {
         ok: true,
-        value: { ...base, type: 'wmi', key: key.value, value: value.value } satisfies WmiClaim,
+        value: { ...baseV10, type: 'wmi', key: key.value, value: value.value } satisfies WmiClaim,
       };
     }
-    case 'vds-pattern': {
-      const key = parseVdsKey(json.key);
+    case 'vds-schema': {
+      const key = parseVdsSchemaKey(json.key);
       if (!key.ok) {
         return key;
       }
-      const value = parseVdsValue(json.value);
+      const value = parseEmptyObject(json.value, 'value');
       if (!value.ok) {
         return value;
       }
       return {
         ok: true,
         value: {
-          ...base,
+          ...baseV11,
+          type: 'vds-schema',
+          key: key.value,
+          value: value.value,
+        } satisfies VdsSchemaClaim,
+      };
+    }
+    case 'vds-binding': {
+      const key = parseVdsBindingKey(json.key);
+      if (!key.ok) {
+        return key;
+      }
+      const value = parseEmptyObject(json.value, 'value');
+      if (!value.ok) {
+        return value;
+      }
+      return {
+        ok: true,
+        value: {
+          ...baseV11,
+          type: 'vds-binding',
+          key: key.value,
+          value: value.value,
+        } satisfies VdsBindingClaim,
+      };
+    }
+    case 'vds-pattern': {
+      const key = parseVdsPatternKey(json.key);
+      if (!key.ok) {
+        return key;
+      }
+      const value = parseVdsPatternValue(json.value);
+      if (!value.ok) {
+        return value;
+      }
+      return {
+        ok: true,
+        value: {
+          ...baseV11,
           type: 'vds-pattern',
           key: key.value,
-          value: {
-            attribute: value.value.attribute as VehicleAttribute,
-            code: value.value.code,
-          },
+          value: value.value,
         } satisfies VdsPatternClaim,
       };
     }
@@ -315,7 +460,7 @@ export function parseClaim(json: unknown): ParseResult<Claim> {
       return {
         ok: true,
         value: {
-          ...base,
+          ...baseV10,
           type: 'year-hint',
           key: key.value,
           value: {

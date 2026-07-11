@@ -53,8 +53,20 @@ export const MANIFEST_REQUIRED_KEYS = new Set([
 
 export const CLAIM_TYPES: readonly ClaimType[] = [
   'wmi',
+  'vds-schema',
+  'vds-binding',
   'vds-pattern',
   'year-hint',
+];
+
+/** Claim types that require schemaVersion "1.0". */
+export const CLAIM_TYPES_V10: readonly ClaimType[] = ['wmi', 'year-hint'];
+
+/** Claim types that require schemaVersion "1.1". */
+export const CLAIM_TYPES_V11: readonly ClaimType[] = [
+  'vds-schema',
+  'vds-binding',
+  'vds-pattern',
 ];
 
 export const PROVENANCE_VALUES: readonly Provenance[] = [
@@ -64,6 +76,7 @@ export const PROVENANCE_VALUES: readonly Provenance[] = [
   'oem',
 ];
 
+/** Genesis profile attribute registry per PROTOCOL.md §4.2. */
 export const VEHICLE_ATTRIBUTES: readonly VehicleAttribute[] = [
   'model',
   'series',
@@ -72,8 +85,8 @@ export const VEHICLE_ATTRIBUTES: readonly VehicleAttribute[] = [
   'driveType',
   'transmission',
   'engine',
-  'restraint',
-  'gvwrClass',
+  'engineCylinders',
+  'displacementL',
   'plant',
 ];
 
@@ -91,8 +104,8 @@ export const SIGNATURE_RE = /^0x[0-9a-fA-F]{130}$/;
 /** ar:// URI for evidence. */
 export const AR_URI_RE = /^ar:\/\/[A-Za-z0-9_-]+$/;
 
-/** VIN alphabet chars plus wildcard for VDS patterns. */
-export const VDS_PATTERN_CHARS = '0123456789ABCDEFGHJKLMNPRSTUVWXYZ*';
+/** VIN alphabet chars allowed as match literals (I, O, Q excluded). */
+export const MATCH_LITERAL_CHARS = '0123456789ABCDEFGHJKLMNPRSTUVWXYZ';
 
-/** Positions range within VDS positions 4–8. */
-export const POSITIONS_RE = /^([4-8])-([4-8])$/;
+/** Well-formed attribute name: camelCase token. */
+export const ATTRIBUTE_NAME_RE = /^[a-z][a-zA-Z0-9]*$/;

@@ -1,16 +1,15 @@
 import { VIN_ALPHABET } from '../constants.js';
 import {
   AR_URI_RE,
+  ATTRIBUTE_NAME_RE,
   CLAIM_TYPES,
+  CLAIM_TYPES_V10,
   CYCLE_RULES,
-  POSITIONS_RE,
   PROVENANCE_VALUES,
   SHA256_HASH_RE,
   SIGNATURE_RE,
-  VDS_PATTERN_CHARS,
-  VEHICLE_ATTRIBUTES,
 } from './constants.js';
-import type { ParseError, ParseResult } from './types.js';
+import type { ClaimSchemaVersion, ClaimType, ParseError, ParseResult } from './types.js';
 
 export function parseError(code: string, message: string): ParseError {
   return { code, message };
@@ -69,6 +68,32 @@ export function parseSchemaVersion(value: unknown): ParseResult<'1.0'> {
   return { ok: true, value: '1.0' };
 }
 
+export function parseClaimSchemaVersion(
+  value: unknown,
+  claimType: ClaimType,
+): ParseResult<ClaimSchemaVersion> {
+  if (typeof value !== 'string') {
+    return fail('unsupported-schema-version', 'schemaVersion must be a string');
+  }
+  const major = value.split('.')[0];
+  if (major !== '1') {
+    return fail('unsupported-schema-major', `Unsupported schema major version: ${major}`);
+  }
+
+  const expectedMinor = (CLAIM_TYPES_V10 as readonly string[]).includes(claimType) ? '1.0' : '1.1';
+  if (value !== expectedMinor) {
+    return fail(
+      'unsupported-schema-version',
+      `schemaVersion must be "${expectedMinor}" for claim type "${claimType}"`,
+    );
+  }
+
+  if (value === '1.0') {
+    return { ok: true, value: '1.0' };
+  }
+  return { ok: true, value: '1.1' };
+}
+
 export function parseSha256Hash(value: unknown, field: string): ParseResult<string> {
   if (typeof value !== 'string' || !SHA256_HASH_RE.test(value)) {
     return fail('invalid-hash', `Invalid sha256 hash for ${field}`);
@@ -113,6 +138,57 @@ export function parseWmiCode(value: unknown, field: string): ParseResult<string>
   return str;
 }
 
+export function parseBindingWmi(value: unknown, field: string): ParseResult<string> {
+  const str = parseNonEmptyString(value, field);
+  if (!str.ok) {
+    return str;
+  }
+  if (str.value.length !== 3 && str.value.length !== 6) {
+    return fail(`invalid-${field}`, `${field} must be exactly 3 or 6 characters`);
+  }
+  for (const char of str.value) {
+    if (!VIN_ALPHABET.includes(char)) {
+      return fail(`invalid-${field}`, `${field} contains invalid VIN character: ${char}`);
+    }
+  }
+  return str;
+}
+
+export function parseModelYear(value: unknown, field: string): ParseResult<number> {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return fail(`invalid-${field}`, `${field} must be an integer`);
+  }
+  return { ok: true, value };
+}
+
+export function parseYearTo(value: unknown): ParseResult<number | null> {
+  if (value === null) {
+    return { ok: true, value: null };
+  }
+  return parseModelYear(value, 'yearTo');
+}
+
+export function parseEmptyObject(value: unknown, field: string): ParseResult<Record<string, never>> {
+  if (!isPlainObject(value)) {
+    return fail(`invalid-${field}`, `${field} must be an object`);
+  }
+  if (Object.keys(value).length !== 0) {
+    return fail(`invalid-${field}`, `${field} must be an empty object`);
+  }
+  return { ok: true, value: {} };
+}
+
+export function parseAttributeName(value: unknown): ParseResult<string> {
+  const str = parseNonEmptyString(value, 'attribute');
+  if (!str.ok) {
+    return str;
+  }
+  if (!ATTRIBUTE_NAME_RE.test(str.value)) {
+    return fail('invalid-attribute', 'attribute must be a well-formed camelCase token');
+  }
+  return str;
+}
+
 export function parseEvidence(value: unknown): ParseResult<string[] | undefined> {
   if (value === undefined) {
     return { ok: true, value: undefined };
@@ -146,46 +222,6 @@ export function parseClaimType(value: unknown): ParseResult<(typeof CLAIM_TYPES)
     return fail('invalid-claim-type', 'Invalid claim type');
   }
   return { ok: true, value: value as (typeof CLAIM_TYPES)[number] };
-}
-
-export function parsePositions(value: unknown): ParseResult<{ start: number; end: number }> {
-  if (typeof value !== 'string') {
-    return fail('invalid-positions', 'positions must be a string');
-  }
-  const match = POSITIONS_RE.exec(value);
-  if (!match) {
-    return fail('invalid-positions', 'positions must be an inclusive range within 4-8');
-  }
-  const start = Number(match[1]);
-  const end = Number(match[2]);
-  if (start > end) {
-    return fail('invalid-positions', 'positions start must not exceed end');
-  }
-  return { ok: true, value: { start, end } };
-}
-
-export function parseVdsPattern(value: unknown, rangeLength: number): ParseResult<string> {
-  if (typeof value !== 'string') {
-    return fail('invalid-pattern', 'pattern must be a string');
-  }
-  if (value.length !== rangeLength) {
-    return fail('invalid-pattern', 'pattern length must equal positions range length');
-  }
-  for (const char of value) {
-    if (!VDS_PATTERN_CHARS.includes(char)) {
-      return fail('invalid-pattern', `pattern contains invalid character: ${char}`);
-    }
-  }
-  return { ok: true, value };
-}
-
-export function parseVehicleAttribute(
-  value: unknown,
-): ParseResult<(typeof VEHICLE_ATTRIBUTES)[number]> {
-  if (typeof value !== 'string' || !(VEHICLE_ATTRIBUTES as readonly string[]).includes(value)) {
-    return fail('invalid-attribute', 'Invalid vehicle attribute');
-  }
-  return { ok: true, value: value as (typeof VEHICLE_ATTRIBUTES)[number] };
 }
 
 export function parseCycleRule(value: unknown): ParseResult<(typeof CYCLE_RULES)[number]> {
