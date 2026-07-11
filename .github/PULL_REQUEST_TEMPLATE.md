@@ -11,5 +11,5 @@ Fixes # (if applicable)
 - [ ] CI is green
 - [ ] Changeset added (`pnpm changeset`) if packages changed
 - [ ] Tests updated for behavior changes
-- [ ] No runtime dependencies added (or linked approving issue)
-- [ ] Protocol changes have a linked `protocol` issue
+- [ ] No runtime dependencies added outside allowed subpaths (see CONTRIBUTING.md)
+- [ ] Protocol changes: changeset describes the change (issue link optional, required from phase 2)

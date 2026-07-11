@@ -7,6 +7,8 @@ labels:
 assignees: []
 ---
 
+> While Vincent has a single maintainer (phase 1), protocol changes are made directly with a changeset; this template is for future contributors when phase 2 governance applies.
+
 ## Motivation
 
 Why is this change needed? What problem or gap does it address?

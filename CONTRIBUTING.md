@@ -32,7 +32,7 @@ Package names use the `@kargain` npm scope. See [README.md](README.md) for the p
 
 - TypeScript strict mode; no `any`.
 - No `console.log` in package source (`packages/**/src`).
-- Zero runtime dependencies in packages unless an open issue explicitly approves an exception.
+- Zero runtime dependencies in the main entry (`.`) and `./wmi` subpaths; any exception must stay isolated to its own subpath (e.g. `./protocol`). Additional runtime dependencies are added deliberately and must be justified in the changeset; while the project has a single maintainer, no GitHub issue is required.
 - Behavior changes require tests.
 - Every package change requires a changeset: run `pnpm changeset` and commit the generated file.
 
@@ -61,9 +61,9 @@ Every data contribution must include an explicit CC0-1.0 dedication. See [DATA-L
 
 ## Protocol changes
 
-Changes to [docs/PROTOCOL.md](docs/PROTOCOL.md) affect all implementations. Propose them through a GitHub issue labeled `protocol` before opening a spec PR. Process and governance phases are described in [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
+Changes to [docs/PROTOCOL.md](docs/PROTOCOL.md) affect all implementations. Protocol and dependency decisions land through pull requests with a changeset; process and governance phases are described in [docs/GOVERNANCE.md](docs/GOVERNANCE.md). A prior GitHub issue is not required in phase 1.
 
-Use the protocol change issue template when available. Breaking wire-format changes require a new `schemaVersion` per the spec.
+Breaking wire-format changes require a new `schemaVersion` per the spec.
 
 ## Code of conduct
 

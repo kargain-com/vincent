@@ -10,9 +10,11 @@ This is not decentralized governance. The maintainer has final say on what merge
 
 ## Decision records
 
-Protocol-affecting decisions are recorded in GitHub issues labeled `protocol`. Anyone may open such an issue to propose a change, raise a concern, or document a design choice.
+Governance tightens by phase. The record-keeping model depends on how many people contribute to the repository.
 
-A change to [PROTOCOL.md](PROTOCOL.md) requires a `protocol`-labeled issue first. The issue should be discussed and agreed in principle before a pull request modifies the normative spec. Merging a protocol change without a prior issue is out of process.
+**Phase 1 (now):** Vincent has a single maintainer. Protocol, dependency, and release decisions land through pull requests with a changeset; rationale is recorded in maintainer session logs. A prior GitHub issue is not required. The maintainer has final say on what merges and ships.
+
+**Phase 2 onward:** When multiple contributors are active, protocol-affecting decisions move to an issue-based record. Anyone may open a GitHub issue labeled `protocol` to propose a change, raise a concern, or document a design choice. A change to [PROTOCOL.md](PROTOCOL.md) should be discussed in such an issue before a pull request modifies the normative spec.
 
 Code and documentation changes that do not affect the protocol follow the normal pull request process described in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -22,8 +24,8 @@ Governance is expected to decentralize in phases. Transitions depend on ecosyste
 
 | Phase | Model | Trigger |
 |-------|-------|---------|
-| 1 | Maintainer plus public review | Now — single maintainer, open issues and PRs |
-| 2 | Multiple dataset publishers and reviewers via EAS attestations | Phase 2 begins when a second independent publisher exists and publishes signed manifests |
+| 1 | Single maintainer; decisions in changesets and maintainer logs | Now — one maintainer, open PRs welcome |
+| 2 | Multiple contributors; issue-based protocol decision record; multiple dataset publishers and reviewers via EAS attestations | Phase 2 begins when multiple contributors are active and a second independent publisher exists and publishes signed manifests |
 | 3 | Reviewer quorum outside the founding team | Phase 3 begins when a sufficient set of independent reviewers with attestation history can form a quorum without founding-team members |
 
 Details of review policy, attestation schemas, and canon selection are defined in [PROTOCOL.md](PROTOCOL.md). This document only describes who decides, not the wire format.
