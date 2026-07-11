@@ -5,7 +5,8 @@
     "rootDir": ".",
     "paths": {
       "@kargain/vincent": ["./src/index.ts"],
-      "@kargain/vincent/wmi": ["./src/wmi-export.ts"]
+      "@kargain/vincent/wmi": ["./src/wmi-export.ts"],
+      "@kargain/vincent/protocol": ["./src/protocol/index.ts"]
     }
   },
   "include": ["src", "test", "vitest.config.ts"]

@@ -1,5 +1,11 @@
 # @kargain/vincent
 
+## 0.3.0
+
+### Minor Changes
+
+- Add `@kargain/vincent/protocol` subpath with RFC 8785 JCS canonicalization, SHA-256 hashing, EIP-191 signing/verification, and fail-closed parsing per PROTOCOL.md v0.1.
+
 ## 0.2.0
 
 ### Minor Changes

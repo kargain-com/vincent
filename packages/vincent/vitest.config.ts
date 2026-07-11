@@ -30,6 +30,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('./src/wmi-export.ts', import.meta.url)),
       },
       {
+        find: '@kargain/vincent/protocol',
+        replacement: fileURLToPath(new URL('./src/protocol/index.ts', import.meta.url)),
+      },
+      {
         find: '@kargain/vincent',
         replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
       },

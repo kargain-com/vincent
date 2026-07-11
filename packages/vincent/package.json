@@ -1,6 +1,6 @@
 {
   "name": "@kargain/vincent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Offline-first deterministic VIN validation, decoding, and WMI lookup per ISO 3779.",
   "keywords": [
     "vin",
@@ -38,7 +38,15 @@
     "./wmi": {
       "types": "./dist/wmi-export.d.ts",
       "import": "./dist/wmi-export.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol/index.d.ts",
+      "import": "./dist/protocol/index.js"
     }
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0"
   },
   "scripts": {
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",

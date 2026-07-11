@@ -21,6 +21,33 @@ export default tseslint.config(
     rules: {
       'no-console': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@noble/hashes',
+              message: 'Import @noble/hashes only from packages/vincent/src/protocol/crypto.ts',
+            },
+            {
+              name: '@noble/curves',
+              message: 'Import @noble/curves only from packages/vincent/src/protocol/crypto.ts',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@noble/hashes/*', '@noble/curves/*'],
+              message: 'Import @noble/* only from packages/vincent/src/protocol/crypto.ts',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/vincent/src/protocol/crypto.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
 );

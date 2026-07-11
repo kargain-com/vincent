@@ -1,0 +1,158 @@
+{
+  "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cab039431e99c5825582831",
+  "address": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+  "unsigned": {
+    "wmi": {
+      "schemaVersion": "1.0",
+      "type": "wmi",
+      "key": {
+        "wmi": "VF3"
+      },
+      "value": {
+        "manufacturer": "Peugeot",
+        "country": "FR",
+        "region": "EU"
+      },
+      "provenance": "regulatory/us-vpic",
+      "license": "CC0-1.0"
+    },
+    "vdsPattern": {
+      "schemaVersion": "1.0",
+      "type": "vds-pattern",
+      "key": {
+        "wmi": "VF3",
+        "positions": "4-8",
+        "pattern": "LC***"
+      },
+      "value": {
+        "attribute": "model",
+        "code": "308"
+      },
+      "provenance": "community/document",
+      "license": "CC0-1.0",
+      "evidence": [
+        "ar://abc123"
+      ]
+    },
+    "yearHint": {
+      "schemaVersion": "1.0",
+      "type": "year-hint",
+      "key": {
+        "wmi": "VF3"
+      },
+      "value": {
+        "cycleRule": "iso-unreliable"
+      },
+      "provenance": "community/observation",
+      "license": "CC0-1.0"
+    },
+    "manifest": {
+      "schemaVersion": "1.0",
+      "epoch": 1,
+      "reviewPolicy": {
+        "minAccepts": 1,
+        "reviewers": [
+          "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3"
+        ]
+      },
+      "claims": [],
+      "compiler": {
+        "name": "vincent-compiler",
+        "version": "1.0.0"
+      },
+      "dataset": {
+        "jsonlSha256": "abc123deadbeef",
+        "sqliteSha256": "def456deadbeef",
+        "uris": [
+          "ar://dataset1"
+        ]
+      }
+    }
+  },
+  "hashes": {
+    "wmi": "sha256:069a73fecdf00f6d74cef8b26e8d841fc63889bf18a07549607b9c204d6f36d2",
+    "vdsPattern": "sha256:9dff719b4fe043a2a678da2f914d0fbbd692c43dbd7a17232581f5993a6be99e",
+    "yearHint": "sha256:0c6a24a26ad221f9b6209b64253565878bc1c7a76f7454e0a0c0fb49c88abab6",
+    "manifest": "sha256:a01d38228abaea3f325472fb7cf8c89de5b9a4ca9c6df277c90bb10154a662ba"
+  },
+  "signed": {
+    "wmi": {
+      "schemaVersion": "1.0",
+      "type": "wmi",
+      "key": {
+        "wmi": "VF3"
+      },
+      "value": {
+        "manufacturer": "Peugeot",
+        "country": "FR",
+        "region": "EU"
+      },
+      "provenance": "regulatory/us-vpic",
+      "license": "CC0-1.0",
+      "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+      "signature": "0xd3cc125d386f601d4a66374773e8df7c8c8f0572f8afa77804d0c9a6c10202c8112cb52c3cbba33512891575a9f4e3936ccc948cb0017ad33103dda13b509ca71b"
+    },
+    "vdsPattern": {
+      "schemaVersion": "1.0",
+      "type": "vds-pattern",
+      "key": {
+        "wmi": "VF3",
+        "positions": "4-8",
+        "pattern": "LC***"
+      },
+      "value": {
+        "attribute": "model",
+        "code": "308"
+      },
+      "provenance": "community/document",
+      "license": "CC0-1.0",
+      "evidence": [
+        "ar://abc123"
+      ],
+      "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+      "signature": "0x075c9ac4491f0012e645074b7cbe6250d9719fe398510449c2ddab61c3cbc02114971826d8117e8a68b0f8f2e9a8724821d3da76ca435f8496fc93025d223c3f1c"
+    },
+    "yearHint": {
+      "schemaVersion": "1.0",
+      "type": "year-hint",
+      "key": {
+        "wmi": "VF3"
+      },
+      "value": {
+        "cycleRule": "iso-unreliable"
+      },
+      "provenance": "community/observation",
+      "license": "CC0-1.0",
+      "contributor": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+      "signature": "0x57f0f7a24ade266271a3af18d90db229158055144c6983de182697b211d11b9576a2223b2bd57919ba1372d1e50d7642d11b5f57751ffc9b898ef508e9318c2e1c"
+    },
+    "manifest": {
+      "schemaVersion": "1.0",
+      "epoch": 1,
+      "reviewPolicy": {
+        "minAccepts": 1,
+        "reviewers": [
+          "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3"
+        ]
+      },
+      "claims": [
+        "sha256:069a73fecdf00f6d74cef8b26e8d841fc63889bf18a07549607b9c204d6f36d2",
+        "sha256:0c6a24a26ad221f9b6209b64253565878bc1c7a76f7454e0a0c0fb49c88abab6",
+        "sha256:9dff719b4fe043a2a678da2f914d0fbbd692c43dbd7a17232581f5993a6be99e"
+      ],
+      "compiler": {
+        "name": "vincent-compiler",
+        "version": "1.0.0"
+      },
+      "dataset": {
+        "jsonlSha256": "abc123deadbeef",
+        "sqliteSha256": "def456deadbeef",
+        "uris": [
+          "ar://dataset1"
+        ]
+      },
+      "publisher": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+      "signature": "0x7e09ddcabee91b5bd82935856ec36a0704f7cf529a3cc1d54d601f8703438041620f8d94d35bc1aeb4b33152dea75dbd33bb8e18ad5a9d4fe2dab0020242f8911b"
+    }
+  }
+}
