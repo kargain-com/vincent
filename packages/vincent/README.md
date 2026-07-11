@@ -1,8 +1,6 @@
 # @kargain/vincent
 
-Pure, deterministic functions over the VIN string — normalization, validation, check digit, model year, and coarse region. WMI lookup is a separate entry point with layered loading. The core and WMI entry points have zero runtime dependencies; the protocol entry adds `@noble/hashes` and `@noble/curves` for EIP-191 signing.
-
-Make/model decoding will ship in a future `vincent` decoder module (phase P).
+Pure, deterministic functions over the VIN string — normalization, validation, check digit, model year, and coarse region. WMI lookup is a separate entry point with layered loading. The core and WMI entry points have zero runtime dependencies; the protocol entry adds `@noble/hashes` and `@noble/curves` for EIP-191 signing. Attribute decoding from compiled epoch datasets ships in `@kargain/vincent/decoder` with an optional `@sqlite.org/sqlite-wasm` peer dependency.
 
 ## Entry points
 
@@ -11,6 +9,7 @@ Make/model decoding will ship in a future `vincent` decoder module (phase P).
 | `@kargain/vincent` | ~3 KiB | Core deterministic APIs only — no WMI data |
 | `@kargain/vincent/wmi` | ~40 KiB core + ~132 KiB extended on demand | `lookupWmi`, `WmiInfo` |
 | `@kargain/vincent/protocol` | ~3 KiB entry + noble deps | JCS canonicalization, hashing, signing, parsing |
+| `@kargain/vincent/decoder` | entry + optional sqlite-wasm | `createDecoder`, `matchExpression`, `DecodeResult` |
 
 Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) loads via dynamic `import()` only when needed. Mass-manufacturer 3-character WMIs load lazily on the first `lookupWmi` call.
 
@@ -38,7 +37,7 @@ Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) 
 
 ### `@kargain/vincent/protocol`
 
-Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.1 claim parsing, JCS canonicalization, and EIP-191 signing. VIN matching and decoder resolution ship in a future decoder module (phase P-4).
+Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.1 claim parsing, JCS canonicalization, and EIP-191 signing. Runtime VIN matching and decoder resolution ship in `@kargain/vincent/decoder`.
 
 **Claim types** (`schemaVersion` per type):
 
@@ -59,7 +58,27 @@ Implements [PROTOCOL.md](../../docs/PROTOCOL.md) v1.1 claim parsing, JCS canonic
 | `verifyClaim(claim)` / `verifyManifest(manifest)` | Signature + EIP-55 verification |
 | `parseClaim(json)` / `parseManifest(json)` | Fail-closed wire-format parsing |
 | `parseMatchSegment(segment)` | Match grammar validation (§4.3); no VIN matching |
+| `parseMatchExpression(match)` | Parse composite vds/vis match object |
 | Types | `Claim`, `Manifest`, `MatchToken`, `VdsSchemaClaim`, `VdsBindingClaim`, `VdsPatternClaim`, … |
+
+### `@kargain/vincent/decoder`
+
+Implements [PROTOCOL.md](../../docs/PROTOCOL.md) §4.4 decoder resolution over compiler-produced SQLite epoch datasets. Install the optional peer dependency before use:
+
+```bash
+npm install @sqlite.org/sqlite-wasm
+```
+
+Datasets are pre-verified `Uint8Array` bytes from a compiled epoch (JSONL + derived SQLite cache). Fetching from Arweave and verifying `jsonl_sha256` is a separate loader concern (phase A).
+
+| Export | Description |
+|--------|-------------|
+| `createDecoder(dataset)` | `Promise<Decoder>` — opens SQLite WASM engine and deserializes epoch bytes |
+| `decoder.decode(vin, options?)` | Sync decode: WMI from dataset, year-scoped bindings, pattern match, attribute merge |
+| `matchExpression(match, vin)` | Pure §4.3 matcher (vds@4, vis@10); unit-testable without SQLite |
+| Types | `DecodeResult`, `DecodedAttribute`, `AttributeCandidate`, `Decoder`, … |
+
+Conflicts are never guessed: ambiguous model years and overlapping pattern values surface as `ambiguous` / `yearDependent` with candidate lists.
 
 ## Usage
 
@@ -102,6 +121,19 @@ const check = verifyClaim(signed);
 
 const parsed = parseClaim(JSON.parse(jsonText));
 // parsed.ok ? parsed.value : parsed.error
+```
+
+### Decoder
+
+```ts
+import { createDecoder } from '@kargain/vincent/decoder';
+
+// `epochBytes` — pre-verified SQLite cache from a compiled epoch manifest
+const decoder = await createDecoder(epochBytes);
+const result = decoder.decode('1FA12BBABG1234567');
+// result.wmi?.manufacturer === 'Ford'
+// result.attributes — model, bodyType, fuelType, plant, …
+// result.year — resolved or ambiguous with candidates
 ```
 
 ## Data provenance

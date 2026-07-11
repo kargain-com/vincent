@@ -1,5 +1,11 @@
 # @kargain/vincent
 
+## 0.5.0
+
+### Minor Changes
+
+- Add `@kargain/vincent/decoder` subpath: offline VIN attribute decoding from compiler-produced SQLite epoch datasets via optional `@sqlite.org/sqlite-wasm` peer dependency.
+
 ## 0.4.0
 
 ### Minor Changes

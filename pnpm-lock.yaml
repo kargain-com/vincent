@@ -12,6 +12,9 @@ catalogs:
     '@eslint/js':
       specifier: 9.39.4
       version: 9.39.4
+    '@sqlite.org/sqlite-wasm':
+      specifier: 3.49.2-build1
+      version: 3.49.2-build1
     '@types/adm-zip':
       specifier: 0.5.7
       version: 0.5.7
@@ -91,6 +94,12 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0
     devDependencies:
+      '@kargain/vincent-compiler':
+        specifier: workspace:*
+        version: link:../../compiler
+      '@sqlite.org/sqlite-wasm':
+        specifier: 'catalog:'
+        version: 3.49.2-build1
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.1
@@ -422,6 +431,10 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
+
+  '@sqlite.org/sqlite-wasm@3.49.2-build1':
+    resolution: {integrity: sha512-yQSfIBn4alEXNcRj8o47rI4pID0JrsavyskzaH4PCq77PVpc05WUeIgqFOT86fa62KpMM9/qaRH8dtpia3UxGQ==}
+    hasBin: true
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -1741,6 +1754,8 @@ snapshots:
     optional: true
 
   '@rolldown/pluginutils@1.0.1': {}
+
+  '@sqlite.org/sqlite-wasm@3.49.2-build1': {}
 
   '@standard-schema/spec@1.1.0': {}
 

@@ -43,10 +43,10 @@ This document is the founder runbook for publishing `@kargain/vincent` to npm. P
    pnpm --filter @kargain/vincent pack
    ```
 
-   Confirm the tarball includes `dist/index.js` (main entry, no WMI data), `dist/wmi-export.js`, `dist/wmi-core.generated.js`, and `dist/wmi-extended.generated.js`.
+   Confirm the tarball includes `dist/index.js` (main entry, no WMI data), `dist/wmi-export.js`, `dist/decoder-export.js`, `dist/wmi-core.generated.js`, and `dist/wmi-extended.generated.js`.
 
 ## Notes
 
-- **Future decoder module:** When the client-side decoder ships, it will declare `@sqlite.org/sqlite-wasm` as an optional peer dependency.
+- **Decoder module:** `@kargain/vincent/decoder` declares `@sqlite.org/sqlite-wasm` as an optional peer dependency. Consumers install it separately; core and WMI entry points remain dependency-free.
 - **npm provenance:** Deferred until CI publishing is implemented.
 - **Dry-run before first publish:** Use `pnpm --filter @kargain/vincent pack` to inspect tarball contents without publishing. Verify layered WMI entry points (`dist/index.js`, `dist/wmi-export.js`, generated data modules) are present.
