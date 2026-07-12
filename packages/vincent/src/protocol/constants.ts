@@ -53,12 +53,12 @@ export const MANIFEST_TOP_LEVEL_KEYS = new Set([
   'signature',
 ]);
 
-/** Required top-level keys for manifests (parent is epoch-dependent). */
+/** Required top-level keys for manifests. */
 export const MANIFEST_REQUIRED_KEYS = new Set([
   'schemaVersion',
   'epoch',
+  'parent',
   'reviewPolicy',
-  'claims',
   'compiler',
   'dataset',
   'publisher',

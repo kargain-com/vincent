@@ -61,6 +61,7 @@ const manifest = signManifest(
   {
     schemaVersion: golden.manifest.schemaVersion,
     epoch: golden.manifest.epoch,
+    parent: null,
     reviewPolicy: golden.manifest.reviewPolicy,
     claims: manifestClaims,
     compiler: golden.manifest.compiler,

@@ -10,6 +10,11 @@ describe('parseManifest', () => {
     expect(parseManifest(validManifest)).toEqual({ ok: true, value: validManifest });
   });
 
+  it('accepts manifest without claims', () => {
+    const { claims: _claims, ...withoutClaims } = validManifest;
+    expect(parseManifest(withoutClaims).ok).toBe(true);
+  });
+
   it('rejects non-object input', () => {
     expect(parseManifest([]).ok).toBe(false);
   });
@@ -24,8 +29,14 @@ describe('parseManifest', () => {
     expect(parseManifest(partial).ok).toBe(false);
   });
 
-  it('rejects null parent', () => {
-    expect(parseManifest({ ...validManifest, parent: null }).ok).toBe(false);
+  it('requires null parent for genesis', () => {
+    expect(parseManifest({ ...validManifest, parent: null }).ok).toBe(true);
+    expect(
+      parseManifest({
+        ...validManifest,
+        parent: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      }).ok,
+    ).toBe(false);
   });
 
   it('rejects unsupported schemaVersion', () => {
@@ -37,28 +48,20 @@ describe('parseManifest', () => {
     expect(parseManifest({ ...validManifest, epoch: 1.5 }).ok).toBe(false);
   });
 
-  it('rejects genesis manifest with parent', () => {
-    expect(
-      parseManifest({
-        ...validManifest,
-        epoch: 1,
-        parent: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      }).ok,
-    ).toBe(false);
-  });
-
-  it('requires parent for non-genesis epoch', () => {
+  it('requires parent merkleRoot for non-genesis epoch', () => {
     const withoutParent = { ...validManifest, epoch: 2 };
+    delete (withoutParent as { parent?: string | null }).parent;
     expect(parseManifest(withoutParent).ok).toBe(false);
+    expect(parseManifest({ ...validManifest, epoch: 2, parent: null }).ok).toBe(false);
   });
 
-  it('accepts non-genesis manifest with parent', () => {
+  it('accepts non-genesis manifest with parent merkleRoot', () => {
     const parent = 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     expect(parseManifest({ ...validManifest, epoch: 2, parent }).ok).toBe(true);
   });
 
   it('rejects unsorted claims', () => {
-    const claims = [...validManifest.claims].reverse();
+    const claims = [...validManifest.claims!].reverse();
     expect(parseManifest({ ...validManifest, claims }).ok).toBe(false);
   });
 

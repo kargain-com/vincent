@@ -43,9 +43,10 @@ where `leaves` is `Map<leafKey, { leaf, leafHash, proof }>` (`leafKey` is `wmi` 
 
 ### `verifyEpoch(manifest, claims)`
 
-1. Verifies manifest signature
-2. Compiles manifest-listed claims using `manifest.claims` as anchor order
-3. Compares rebuilt `jsonlSha256` and `merkleRoot` to `manifest.dataset`
+1. Verifies manifest signature (fail-closed)
+2. **Inline claims** (`manifest.claims` present): compiles manifest-listed claims using `manifest.claims` as anchor order
+3. **Claims omitted** (genesis / large epoch): compiles the provided claim set directly via `compile(claims, {})`
+4. Compares rebuilt `jsonlSha256` and `merkleRoot` to `manifest.dataset`
 
 This is the §6 **`rebuilt = true`** byte-reproducibility check.
 

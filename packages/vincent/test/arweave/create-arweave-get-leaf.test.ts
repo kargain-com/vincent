@@ -149,6 +149,37 @@ describe('createArweaveGetLeaf', () => {
     await expect(getLeaf('1FA')).rejects.toThrow('graphql request failed: 500');
   });
 
+  it('rejects non-JSON graphql responses with HTTP 200', async () => {
+    const fetchImpl: typeof fetch = () => Promise.resolve(new Response('not-json', { status: 200 }));
+
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl: 'https://mock.arweave.test',
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    await expect(getLeaf('1FA')).rejects.toThrow('graphql response was not valid JSON');
+  });
+
+  it('propagates HTTP errors when the JSON body is not a sort/order schema mismatch', async () => {
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ errors: [{ message: 'Internal server error' }] }), {
+          status: 500,
+        }),
+      );
+
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl: 'https://mock.arweave.test',
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    await expect(getLeaf('1FA')).rejects.toThrow('graphql request failed: 500');
+  });
+
   it('propagates leaf data HTTP errors', async () => {
     const fetchImpl = graphqlThen(() => new Response('missing', { status: 404 }));
 
@@ -244,5 +275,133 @@ describe('createArweaveGetLeaf', () => {
     });
 
     await expect(getLeaf('1FA')).rejects.toThrow('proof must be an array');
+  });
+
+  it('uses order: DESC on Irys GraphQL without attempting sort', async () => {
+    const gatewayUrl = 'https://gateway.irys.test';
+    const graphqlUrl = 'https://uploader.irys.test/graphql';
+    const queries: string[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      const url = requestUrl(input);
+      if (url === graphqlUrl) {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        const query = (JSON.parse(body) as { query: string }).query;
+        queries.push(query);
+        return Promise.resolve(new Response(EDGE_HIT, { status: 200 }));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ leaf: LEAF, proof: PROOF }), { status: 200 }),
+      );
+    };
+
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl,
+      graphqlUrl,
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    await expect(getLeaf('1FA')).resolves.toEqual({ leaf: LEAF, proof: PROOF });
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toContain('order: DESC');
+    expect(queries[0]).not.toContain('sort: HEIGHT_DESC');
+  });
+
+  it('falls back to sort when order returns HTTP 400 on Arweave gateways', async () => {
+    const gatewayUrl = 'https://gateway.irys.test';
+    const graphqlUrl = 'https://arweave.test/graphql';
+    const queries: string[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      const url = requestUrl(input);
+      if (url === graphqlUrl) {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        const query = (JSON.parse(body) as { query: string }).query;
+        queries.push(query);
+        if (query.includes('order: DESC')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                errors: [{ message: 'Unknown argument "order" on field "Query.transactions".' }],
+              }),
+              { status: 400 },
+            ),
+          );
+        }
+        return Promise.resolve(new Response(EDGE_HIT, { status: 200 }));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ leaf: LEAF, proof: PROOF }), { status: 200 }),
+      );
+    };
+
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl,
+      graphqlUrl,
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    await expect(getLeaf('1FA')).resolves.toEqual({ leaf: LEAF, proof: PROOF });
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toContain('order: DESC');
+    expect(queries[1]).toContain('sort: HEIGHT_DESC');
+  });
+
+  it('does not fail when sort would return HTTP 400 because order is tried first', async () => {
+    const gatewayUrl = 'https://gateway.irys.test';
+    const graphqlUrl = 'https://uploader.irys.test/graphql';
+    const fetchImpl: typeof fetch = (input, init) => {
+      const url = requestUrl(input);
+      if (url === graphqlUrl) {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        const query = (JSON.parse(body) as { query: string }).query;
+        if (query.includes('sort: HEIGHT_DESC')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                errors: [{ message: 'Unknown argument "sort" on field "Query.transactions".' }],
+              }),
+              { status: 400 },
+            ),
+          );
+        }
+        return Promise.resolve(new Response(EDGE_HIT, { status: 200 }));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ leaf: LEAF, proof: PROOF }), { status: 200 }),
+      );
+    };
+
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl,
+      graphqlUrl,
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    await expect(getLeaf('1FA')).resolves.toEqual({ leaf: LEAF, proof: PROOF });
+  });
+
+  it('surfaces GraphQL errors instead of reporting a missing leaf', async () => {
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ errors: [{ message: 'Query execution timed out' }] }),
+          { status: 200 },
+        ),
+      );
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl: 'https://mock.arweave.test',
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    await expect(getLeaf('1FA')).rejects.toThrow(
+      'graphql query failed: Query execution timed out',
+    );
   });
 });

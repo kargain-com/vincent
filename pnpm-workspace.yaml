@@ -3,9 +3,12 @@ packages:
   - pipeline
   - compiler
   - contracts
+  - publish
 
 allowBuilds:
   esbuild: true
+  keccak: true
+  secp256k1: true
 
 catalog:
   typescript: 6.0.3

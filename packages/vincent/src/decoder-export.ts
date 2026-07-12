@@ -3,6 +3,7 @@ export {
   matchExpression,
   originFromWmiTable,
   resolveWmiKey,
+  verifyLeaf,
   type AttributeCandidate,
   type CreateDecoderOptions,
   type DecodeOptions,

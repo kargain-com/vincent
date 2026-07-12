@@ -1,9 +1,23 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { claimHash, signManifest } from '@kargain/vincent/protocol';
+import type { Manifest } from '@kargain/vincent/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { compile } from '../src/compile.js';
 import { verifyEpoch } from '../src/verify-epoch.js';
 import { loadGenesisMiniClaims, loadGenesisMiniManifest, TEST_PRIVATE_KEY } from './helpers.js';
+
+const PUBLISH_MANIFEST = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../publish/fixtures/manifest.json',
+);
+
+function loadClaimsOmittedManifest(): Manifest {
+  return JSON.parse(readFileSync(PUBLISH_MANIFEST, 'utf8')) as Manifest;
+}
 
 function buildSignedManifest() {
   const claims = loadGenesisMiniClaims();
@@ -17,11 +31,41 @@ function buildSignedManifest() {
     {
       schemaVersion: '1.0',
       epoch: 1,
+      parent: null,
       reviewPolicy: {
         minAccepts: 1,
         reviewers: ['0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3'],
       },
       claims: claimHashes,
+      compiler: { name: 'vincent-compiler', version: '1.0.0' },
+      dataset: {
+        jsonlSha256: built.value.jsonlSha256,
+        merkleRoot: built.value.merkleRoot,
+        uris: ['ar://genesis-mini'],
+      },
+    },
+    TEST_PRIVATE_KEY,
+  );
+
+  return { manifest, claims, built };
+}
+
+function buildClaimsOmittedManifest() {
+  const claims = loadGenesisMiniClaims();
+  const built = compile(claims, {});
+  if (!built.ok) {
+    throw new Error(built.error.message);
+  }
+
+  const manifest = signManifest(
+    {
+      schemaVersion: '1.0',
+      epoch: 1,
+      parent: null,
+      reviewPolicy: {
+        minAccepts: 1,
+        reviewers: ['0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3'],
+      },
       compiler: { name: 'vincent-compiler', version: '1.0.0' },
       dataset: {
         jsonlSha256: built.value.jsonlSha256,
@@ -55,6 +99,7 @@ describe('verifyEpoch', () => {
       {
         schemaVersion: '1.0',
         epoch: manifest.epoch,
+        parent: manifest.parent,
         reviewPolicy: manifest.reviewPolicy,
         claims: manifest.claims,
         compiler: manifest.compiler,
@@ -81,6 +126,7 @@ describe('verifyEpoch', () => {
       {
         schemaVersion: '1.0',
         epoch: manifest.epoch,
+        parent: manifest.parent,
         reviewPolicy: manifest.reviewPolicy,
         claims: manifest.claims,
         compiler: manifest.compiler,
@@ -141,5 +187,88 @@ describe('verifyEpoch', () => {
       return;
     }
     expect(result.reason).toContain('missing claim for manifest hash');
+  });
+});
+
+describe('verifyEpoch claims-omitted', () => {
+  it('passes for committed publish genesis-mini manifest', () => {
+    const manifest = loadClaimsOmittedManifest();
+    const claims = loadGenesisMiniClaims();
+    expect(verifyEpoch(manifest, claims)).toEqual({ ok: true });
+  });
+
+  it('passes when rebuilt from provided claim set', () => {
+    const { manifest, claims } = buildClaimsOmittedManifest();
+    expect(verifyEpoch(manifest, claims)).toEqual({ ok: true });
+  });
+
+  it('fails when jsonlSha256 does not match rebuild', () => {
+    const { manifest, claims } = buildClaimsOmittedManifest();
+    const tampered = signManifest(
+      {
+        ...manifest,
+        dataset: {
+          ...manifest.dataset,
+          jsonlSha256:
+            'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        },
+      },
+      TEST_PRIVATE_KEY,
+    );
+
+    const result = verifyEpoch(tampered, claims);
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toContain('jsonlSha256 mismatch');
+  });
+
+  it('fails when merkleRoot does not match rebuild', () => {
+    const { manifest, claims } = buildClaimsOmittedManifest();
+    const tampered = signManifest(
+      {
+        ...manifest,
+        dataset: {
+          ...manifest.dataset,
+          merkleRoot:
+            'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        },
+      },
+      TEST_PRIVATE_KEY,
+    );
+
+    const result = verifyEpoch(tampered, claims);
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toContain('merkleRoot mismatch');
+  });
+
+  it('fails when manifest signature is invalid', () => {
+    const { manifest, claims } = buildClaimsOmittedManifest();
+    const tampered = {
+      ...manifest,
+      publisher: '0xAb00000000000000000000000000000000000001',
+    };
+
+    const result = verifyEpoch(tampered, claims);
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toBe('invalid-checksum');
+  });
+
+  it('fails when a claim is missing from the provided set', () => {
+    const { manifest, claims } = buildClaimsOmittedManifest();
+    const result = verifyEpoch(manifest, claims.slice(1));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toContain('jsonlSha256 mismatch');
   });
 });

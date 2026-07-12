@@ -225,19 +225,23 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 {
   "schemaVersion": "1.0",
   "epoch": 3,
-  "parent": "sha256:...",                  // manifest hash of epoch 2; genesis: null
+  "parent": "sha256:...",                  // prior epoch merkleRoot; genesis (epoch 1): null
   "reviewPolicy": { "minAccepts": 1, "reviewers": ["0x...", ...] },
-  "claims": ["sha256:...", ...],           // accepted claims, lexicographically sorted
+  "claims": ["sha256:...", ...],           // optional; omitted for large epochs
   "compiler": { "name": "vincent-compiler", "version": "1.2.0" },
   "dataset": {
-    "jsonlSha256": "...",                  // canonical artifact hash (normative)
+    "jsonlSha256": "...",                  // canonical JSONL artifact hash (normative)
     "merkleRoot": "...",                   // Merkle root over per-WMI leaf digests (normative)
-    "uris": ["ar://...", ...]              // at least one; mirrors welcome
+    "uris": ["ar://...", ...]              // JSONL artifact + optional gateway hints
   },
   "publisher": "0x...",
   "signature": "0x..."
 }
 ```
+
+`parent` is always present: `null` for genesis (epoch 1); for epoch &gt; 1, the prior epoch's `merkleRoot` (`sha256:<hex>`). This matches the on-chain `parentRoot` in `VincentAnchorRegistry`.
+
+`dataset` commits the epoch content: `{ jsonlSha256, merkleRoot, uris[] }`. The canonical claim set is committed by `jsonlSha256` over the JSONL artifact (published at one of `uris[]`). When `claims[]` is omitted, clients verify by fetching the JSONL artifact and checking `jsonlSha256`. Leaf discovery is not via enumerated URIs (see §7.2).
 
 `compiler.name` is an opaque protocol identifier of the compiler implementation — not an npm package name or other packaging artifact. The `(compiler.name, compiler.version)` pair identifies the exact implementation required for byte-reproducible builds. The reference implementation identifier is `"vincent-compiler"`.
 
@@ -245,15 +249,19 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 
 - Epochs are **event-driven**: a publisher may build whenever new accepted claims exist. There is no calendar.
 - `reviewPolicy` is declared per manifest; clients decide whether a policy is acceptable to them. Genesis policy: claims with `regulatory/us-vpic` provenance are accepted by import; community claims require reviewer accepts.
-- **Determinism:** given `claims` and `(compiler.name, compiler.version)`, the canonical JSONL MUST be byte-reproducible. The JSONL contains claim fact cores, sorted by (claim type, key fields, claim hash). **Per-WMI leaves** and the **Merkle root** are derived caches; every leaf digest and `merkleRoot` MUST match a rebuild from the same claims. The JSONL hash and Merkle root are committed in the manifest.
+- **Claim commitment:** `claims[]` is optional and omitted for large epochs. When present (small/manual epochs), entries are accepted claim hashes, lexicographically sorted. When omitted, the accepted claim set is committed solely by `dataset.jsonlSha256` over the canonical JSONL artifact published as a dataset artifact (its `ar://` URI appears in `dataset.uris`).
+- **Determinism:** given the accepted claim set and `(compiler.name, compiler.version)`, the canonical JSONL MUST be byte-reproducible. The JSONL contains claim fact cores, sorted by (claim type, key fields, claim hash). **Per-WMI leaves** and the **Merkle root** are derived caches; every leaf digest and `merkleRoot` MUST match a rebuild from the same claims. The JSONL hash and Merkle root are committed in the manifest.
 - **Leaf + Merkle model:** one self-contained **leaf** per WMI key: `{ wmi, bindings[{ yearFrom, yearTo, schemaRef }], schemas: { schemaRef: { patterns } } }` (JCS-canonical JSON, content-addressed by `sha256:<hex>`). Leaves are ordered by WMI. A Merkle tree is built over leaf digests with RFC 6962–style domain separation: leaf node = `SHA256(0x00 || rawDigest)`, internal = `SHA256(0x01 || left || right)`; when a level has an odd count, the last node is carried up unchanged. The client holds only the 32-byte `merkleRoot`. Per VIN it fetches one leaf + Merkle proof, verifies inclusion against the anchored root, and decodes locally. Origin (make/country/region) comes from the bundled WMI table + `vinRegion` — fully offline, no leaf fetch. **Oversized WMIs** (canonical leaf &gt; 128 KiB) are split into year-range **sub-leaves** at keys `wmi#pN` plus a **partition manifest** at key `wmi`; the decoder resolves the manifest, verifies sub-leaves against both `merkleRoot` and manifest `leafHash`, and merges before decode.
-- **Compilation validation:** the compiler validates each claim for parse-time well-formedness only. Epoch integrity is verified by manifest signature plus JSONL/Merkle rebuild (`verifyEpoch`); no per-claim `ecrecover`.
+- **Leaf discovery (ANS-104):** per-WMI leaves are ANS-104 data items **owned by** the manifest `publisher`, tagged `Epoch` (epoch number) and `LeafKey` (`wmi` or `wmi#pN` for partitions). Each item's data is JSON `{ leaf, proof }`. Clients discover a leaf via tag query `(owner=publisher, Epoch, LeafKey)` and verify it against `dataset.merkleRoot`. `dataset.uris[]` includes the JSONL artifact for audit and may include gateway hints; leaf discovery is by tag, not by enumerated URIs.
+- **Compilation validation:** the compiler validates each claim for parse-time well-formedness only. Epoch integrity is verified by manifest signature plus JSONL/Merkle rebuild; when `claims[]` is present, `verifyEpoch` can cross-check inline hashes. No per-claim `ecrecover`.
+- **On-chain anchor:** `VincentAnchorRegistry.publishEpoch(merkleRoot, jsonlSha256, manifestHash, parentRoot, manifestUri)` binds `{ merkleRoot, jsonlSha256, manifestHash, manifestUri, parentRoot }`. Manifest `parent` and on-chain `parentRoot` are the same lineage identifier (prior epoch `merkleRoot`, or null/zero at genesis).
 - **Supersession:** within an epoch's claim set, if claim B (`supersedes: A`) and A are both present, the compiler emits B only. Competing claims for the same key without supersession links are resolved by review weight, then by anchoring order (earlier wins); ties are compiler errors.
 - Publishing is permissionless. Competing manifests for the same epoch height are legitimate; canon is chosen by the client (see 9).
 
 ## 8. Storage
 
 - Default permanent store: **Arweave** (`ar://` URIs). Any content-addressed mirror (IPFS, HTTPS, torrent) is equally valid — the hash, not the location, is the identity.
+- The canonical JSONL dataset is uploaded as a separate artifact; its `ar://` URI appears in `dataset.uris`. Per-WMI leaves are stored as ANS-104 data items tagged by `Epoch` and `LeafKey` (see §7.2); they are not discovered via directory listing or enumerated URIs.
 - Clients MUST verify `jsonlSha256` and `merkleRoot` (and each fetched leaf via its Merkle proof against the anchored root) after every fetch, regardless of source.
 
 ## 9. Anchoring and canon selection

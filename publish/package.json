@@ -1,0 +1,33 @@
+{
+  "name": "@kargain/vincent-publish",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "publish:genesis": "node dist/cli/publish-genesis.js"
+  },
+  "dependencies": {
+    "@irys/upload": "^0.0.3",
+    "@irys/upload-ethereum": "^0.0.3",
+    "@kargain/vincent": "workspace:*",
+    "@kargain/vincent-compiler": "workspace:*",
+    "dotenv": "^16.4.7",
+    "viem": "^2.31.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "4.1.10",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

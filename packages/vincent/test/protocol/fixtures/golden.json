@@ -113,6 +113,7 @@
   "manifest": {
     "schemaVersion": "1.0",
     "epoch": 1,
+    "parent": null,
     "reviewPolicy": {
       "minAccepts": 1,
       "reviewers": [
@@ -138,7 +139,7 @@
       ]
     },
     "publisher": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
-    "signature": "0x29997cae9f12e2621ab7e2bdff473d8f578dc4aa68d261d2fce1c3df3a2260b73560718f9beaf712f4d9d17627444dfbcc94d361f82d70b808efea07344d07601c"
+    "signature": "0x21bb393bbecc134d3797d96dabce49f1a23e47b2f5970f6740ae342c673472fa1e1bec242791d26dee5f2219b81aa3bd6c39691a910223fd827d7d44261ae6d51c"
   },
   "hashes": {
     "wmi": "sha256:98f3ca357a2c0081b4dd0d56346cd1b56dc53b609648ac442e22a8ffc2a6bad8",
@@ -146,6 +147,6 @@
     "vdsBinding": "sha256:25af78ac79cd948f6311d8748d8cbf9bac08ed6980420a07154056cae193a0f4",
     "vdsPattern": "sha256:e78beb3f8c2f489cc809c6e7912bb7584f04b580961e7cc897e95f2e3c4d5cdc",
     "yearHint": "sha256:8f9aa82bfbf271b7ef5662eac967e7c737f3cd2a29e0d08bccad2bb8ef0f3dc7",
-    "manifest": "sha256:c92ddfd86ac2a0dd64bcd7b283fcc5c8f64b53df44f4a8843386602f4882462f"
+    "manifest": "sha256:e673374a5063c100e901e44c6e121ebbd5b3de54c959d72e121601fc0096f234"
   }
 }

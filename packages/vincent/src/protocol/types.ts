@@ -182,9 +182,9 @@ export interface DatasetInfo {
 export interface Manifest {
   schemaVersion: '1.0';
   epoch: number;
-  parent?: string;
+  parent: string | null;
   reviewPolicy: ReviewPolicy;
-  claims: string[];
+  claims?: string[];
   compiler: CompilerInfo;
   dataset: DatasetInfo;
   publisher: string;

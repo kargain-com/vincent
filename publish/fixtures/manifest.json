@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "epoch": 1,
+  "parent": null,
+  "reviewPolicy": {
+    "minAccepts": 1,
+    "reviewers": [
+      "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3"
+    ]
+  },
+  "compiler": {
+    "name": "vincent-compiler",
+    "version": "1.0.0"
+  },
+  "dataset": {
+    "jsonlSha256": "sha256:a0f110eb9b4f2cbd318e5ab909ca1a692bf465c2d73ee516ee36d7bebc6a0eea",
+    "merkleRoot": "sha256:76f6692120d6f8316af6109aee98f8c4782ef6111f2d16959745459df0604f3c",
+    "uris": [
+      "ar://genesis-mini"
+    ]
+  },
+  "publisher": "0xa0e58EC0f3dF4f127e9203A7fd6a494c483719B3",
+  "signature": "0x83b1f5cd3fb8b77aeba8b6c090d2efeb1c1d3fd744eb138f2c1806a4d8dd85b418ffa54289370692bda14314186826063e54629e2dbea13f2001a983c4b148af1b"
+}

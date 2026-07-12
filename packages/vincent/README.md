@@ -87,7 +87,7 @@ Reference `getLeaf` provider that discovers per-WMI leaves via ANS-104 tag queri
 
 | Export | Description |
 |--------|-------------|
-| `createArweaveGetLeaf({ gatewayUrl, publisher, epoch, fetchImpl? })` | Returns a `getLeaf(leafKey)` that resolves `{ leaf, proof }` from the newest matching tagged transaction |
+| `createArweaveGetLeaf({ gatewayUrl, graphqlUrl?, publisher, epoch, fetchImpl? })` | Returns a `getLeaf(leafKey)` that resolves `{ leaf, proof }` from the newest matching tagged transaction; `graphqlUrl` supports Irys deployments where query and data endpoints differ |
 | `LeafNotFoundError` | Thrown when no transaction matches owner + `App`/`Epoch`/`LeafKey` tags (decoder maps to `unknown-wmi`) |
 | Types | `ArweaveGetLeafOptions` |
 
