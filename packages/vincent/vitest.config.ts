@@ -26,6 +26,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@kargain/vincent/anchor',
+        replacement: fileURLToPath(new URL('./src/anchor-export.ts', import.meta.url)),
+      },
+      {
         find: '@kargain/vincent/arweave',
         replacement: fileURLToPath(new URL('./src/arweave-export.ts', import.meta.url)),
       },

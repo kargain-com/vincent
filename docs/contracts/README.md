@@ -12,6 +12,29 @@ Immutable, ownerless, permissionless, append-only per-publisher epoch notary. Re
 
 > **Note:** The address above is precomputed via CREATE2 and is the same on every EVM chain once deployed with the canonical factory, salt, and bytecode. Update the **Verified** column after founder deploy + verify on Base Sepolia.
 
+### Reading epochs (client library)
+
+Integrators can read anchored epochs via `@kargain/vincent/anchor`:
+
+```typescript
+import { createAnchorReader } from '@kargain/vincent/anchor';
+import { baseSepolia } from 'viem/chains';
+
+const reader = createAnchorReader({
+  rpcUrl: process.env.BASE_SEPOLIA_RPC_URL!,
+  chain: baseSepolia,
+});
+
+const epoch = await reader.getLatestEpoch('0xYourPublisher');
+// epoch.merkleRoot — sha256:… form, ready for @kargain/vincent/decoder
+```
+
+`viem` is an optional peer of `@kargain/vincent`; only the `./anchor` subpath imports it. Pass `registryAddress` to override the default CREATE2 address when testing against a local deployment.
+
+### Publish preflight safety
+
+Genesis publish tooling (`@kargain/vincent-publish`) checks `epochCount == 0` for the publisher wallet **before any upload** via [`assertGenesisPublisherAvailable`](../../publish/src/assert-genesis-publisher.ts). Preflight runs in [`preflightGenesisPublish`](../../publish/src/preflight-genesis-publish.ts) and is invoked by [`publishGenesis`](../../publish/src/publish-genesis.ts) and the founder CLI before leaves, JSONL, or manifest bytes are uploaded. A failed preflight performs no uploads. See [`publish/README.md`](../../publish/README.md) for the full preflight checklist (RPC, balances, Irys probes).
+
 ### Deterministic deployment parameters
 
 | Parameter | Value |
