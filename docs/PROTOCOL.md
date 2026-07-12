@@ -152,7 +152,7 @@ Given a VIN and a model year, over the compiled accepted claim set:
 3. For each bound schema, select `vds-pattern` claims whose `match` applies to the VIN. Emit their attribute/value pairs.
 4. The matcher is pure and total: same (VIN, year, claim set) ⇒ same result.
 
-Reference implementation: `@kargain/vincent/decoder` (`createDecoder({ merkleRoot, getLeaf })`).
+Reference implementation: `@kargain/vincent/decoder` (`createDecoder({ merkleRoot, getLeaf })`). Leaf fetch is injectable; the reference Arweave provider is `@kargain/vincent/arweave` (`createArweaveGetLeaf`). On-chain roots are read via `@kargain/vincent/anchor` (`createAnchorReader`).
 
 ### 4.5 VDS compatibility and versioning
 
@@ -270,6 +270,7 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 - **Epoch structure:** Each epoch commits `merkleRoot`, `jsonlSha256`, `manifestHash`, and `manifestUri` (typically `ar://…`), linked by `parentRoot`. Genesis epochs require `parentRoot = 0`; each subsequent epoch must reference the prior epoch's `merkleRoot`.
 - **Per-publisher chains:** Clients choose one or more trusted publisher addresses. A publisher may publish once and discard its signing key (**keyless genesis**); that chain is then frozen forever — trustless and unowned.
 - **Off-chain verification:** The registry records content hashes and timestamps only; it cannot verify Arweave content, leaf inclusion, or manifest signatures. Clients MUST verify off-chain: fetch manifest by URI → confirm content hash equals `manifestHash` → verify publisher signature → read `merkleRoot` → verify each fetched leaf via its Merkle proof against `merkleRoot` (see section 8).
+- **Reference client libraries:** `@kargain/vincent/anchor` (`createAnchorReader`) reads epochs from `VincentAnchorRegistry` and returns protocol `sha256:…` hashes ready for `@kargain/vincent/decoder`. `@kargain/vincent/arweave` (`createArweaveGetLeaf`) is the reference ANS-104 leaf provider; both `getLeaf` and the anchor reader are injectable (mirrors, caches, alternate RPC transports). Canonical registry address: [docs/contracts/README.md](contracts/README.md).
 - **Multi-chain notaries:** EVM chains are interchangeable notaries. The registry deploys at the same CREATE2 address on every EVM chain (canonical deterministic-deployment proxy at `0x4e59b44847b379578588920cA78FbF26c0B4956C`). Publishers are encouraged to anchor the same `merkleRoot` per epoch on multiple chains.
 - **Canon selection is a client policy, not a protocol rule.** Reference policy: among epochs from the client's trusted publisher(s), prefer a pinned epoch or the latest epoch with valid signature and reproducible lineage; growth is additive via overlay publishers, while genesis chains remain frozen.
 - Loss or censorship of any single chain affects discovery only; data, signatures, and other anchors remain intact.

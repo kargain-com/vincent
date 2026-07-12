@@ -30,13 +30,31 @@ Signing, hashing, and canonicalization reuse `@kargain/vincent/protocol` (EIP-19
 
 ## Leaf discovery (A-2b) — `@kargain/vincent/arweave`
 
-The reference ANS-104 tag-query helper now ships from the public `@kargain/vincent`
+The reference ANS-104 tag-query helper ships from the public `@kargain/vincent`
 package. This tooling and the offline e2e tests consume it directly.
 
 ```typescript
 import { createArweaveGetLeaf } from '@kargain/vincent/arweave';
 import { createDecoder } from '@kargain/vincent/decoder';
 ```
+
+## On-chain epoch read (client) — `@kargain/vincent/anchor`
+
+Consumers can read anchored epochs without this publish package:
+
+```typescript
+import { createAnchorReader } from '@kargain/vincent/anchor';
+import { baseSepolia } from 'viem/chains';
+
+const reader = createAnchorReader({
+  rpcUrl: process.env.BASE_SEPOLIA_RPC_URL!,
+  chain: baseSepolia,
+});
+const anchored = await reader.getLatestEpoch(publisher);
+// anchored.merkleRoot → createDecoder({ merkleRoot, getLeaf: createArweaveGetLeaf(...) })
+```
+
+The verify-only CLI uses an internal read-only adapter; integrators should use `@kargain/vincent/anchor` directly.
 
 ## Genesis publish orchestration (A-2c)
 

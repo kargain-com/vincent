@@ -81,6 +81,24 @@ Do **not** deploy to mainnet.
 
 Canonical address table: [`docs/contracts/README.md`](../docs/contracts/README.md).
 
+## Client integration
+
+Integrators read anchored epochs from the public library (not this workspace package):
+
+```typescript
+import { createAnchorReader } from '@kargain/vincent/anchor';
+import { baseSepolia } from 'viem/chains';
+
+const reader = createAnchorReader({
+  rpcUrl: process.env.BASE_SEPOLIA_RPC_URL!,
+  chain: baseSepolia,
+});
+const epoch = await reader.getLatestEpoch('0xYourPublisher');
+// epoch.merkleRoot — sha256:… form for @kargain/vincent/decoder
+```
+
+Default registry address: `0x06667DB3795C70F34b7517D1Af1217D3167BE241` (CREATE2, same on every EVM chain). See [`docs/contracts/README.md`](../docs/contracts/README.md).
+
 ## Compiler settings (reproducible bytecode)
 
 - solc 0.8.28

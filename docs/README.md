@@ -11,14 +11,28 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose changes to these do
 
 ## Library
 
-Published npm package: [`@kargain/vincent`](../packages/vincent) — five entry points:
+Published npm package: [`@kargain/vincent`](../packages/vincent) (0.7.0) — six entry points:
 
-| Subpath | Purpose |
-|---------|---------|
-| `@kargain/vincent` | Core deterministic VIN APIs (no WMI data) |
-| `@kargain/vincent/wmi` | Layered WMI lookup |
-| `@kargain/vincent/protocol` | Claim/manifest parsing, JCS, EIP-191 signing |
-| `@kargain/vincent/decoder` | Merkle-authenticated per-WMI leaf decoding via `createDecoder({ merkleRoot, getLeaf })` |
-| `@kargain/vincent/arweave` | Reference ANS-104 tag-query `getLeaf` provider via `createArweaveGetLeaf(...)` |
+| Subpath | Purpose | Optional peer |
+|---------|---------|---------------|
+| `@kargain/vincent` | Core deterministic VIN APIs (no WMI data) | — |
+| `@kargain/vincent/wmi` | Layered WMI lookup | — |
+| `@kargain/vincent/protocol` | Claim/manifest parsing, JCS, EIP-191 signing | `@noble/*` (bundled) |
+| `@kargain/vincent/decoder` | Merkle-authenticated per-WMI leaf decoding via `createDecoder({ merkleRoot, getLeaf })` | — |
+| `@kargain/vincent/arweave` | Reference ANS-104 tag-query `getLeaf` provider via `createArweaveGetLeaf(...)` | — |
+| `@kargain/vincent/anchor` | Read `VincentAnchorRegistry` epochs via `createAnchorReader(...)` | `viem` |
 
-See the [package README](../packages/vincent/README.md) for API tables and usage.
+End-to-end live decode: `./anchor` (on-chain root) → `./arweave` or custom `getLeaf` → `./decoder`. Core subpaths (`.`, `./wmi`, `./protocol`, `./decoder`, `./arweave`) stay viem-free; only `./anchor` imports `viem`.
+
+See the [package README](../packages/vincent/README.md) for quick start, full decode example, and API tables.
+
+## Private workspace packages
+
+| Package | README |
+|---------|--------|
+| `@kargain/vincent-compiler` | [compiler/README.md](../compiler/README.md) |
+| `@kargain/vincent-pipeline` | [pipeline/README.md](../pipeline/README.md) |
+| `@kargain/vincent-publish` | [publish/README.md](../publish/README.md) |
+| `@kargain/vincent-contracts` | [contracts/README.md](../contracts/README.md) |
+
+Release process: [RELEASING.md](../RELEASING.md).

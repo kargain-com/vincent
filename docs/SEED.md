@@ -34,12 +34,14 @@ Two runs with the same vPIC dump bytes and the same signing key produce byte-ide
 
 See [pipeline/README.md](../pipeline/README.md) for commands, key handling, and validation steps.
 
-## Phase A (future)
+## Phase A (publish)
 
-This iteration uses the P-1 test key for dev/validation. Phase A will:
+Genesis publish tooling lives in `@kargain/vincent-publish` ([publish/README.md](../publish/README.md)). Client decode stack: `@kargain/vincent/anchor` → `@kargain/vincent/arweave` → `@kargain/vincent/decoder`.
+
+Founder-run steps (not automated in CI):
 
 1. Re-run `generate:seed` with the real genesis signing key
-2. Upload the canonical JSONL to Arweave
-3. Anchor `jsonlSha256` and `merkleRoot` on-chain
+2. Upload leaves, JSONL, and manifest via `publish:genesis`
+3. Anchor on Base Sepolia via `VincentAnchorRegistry.publishEpoch`
 
-No network, Arweave, or chain operations are performed in the current pipeline tooling.
+Preflight checks `epochCount == 0` before any upload. See [docs/contracts/README.md](contracts/README.md) for registry address and [PROTOCOL.md](PROTOCOL.md) §9 for anchoring rules.

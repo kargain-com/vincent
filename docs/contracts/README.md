@@ -47,7 +47,10 @@ Genesis publish tooling (`@kargain/vincent-publish`) checks `epochCount == 0` fo
 
 ### Protocol note
 
-This registry implements the richer per-publisher epoch chain described in the maintainer handoff (merkleRoot + jsonlSha256 + manifestHash + parentRoot lineage). It extends the simplified sketch in [PROTOCOL.md §9](../PROTOCOL.md#9-anchoring-and-canon-selection) (`anchor(bytes32 manifestHash, string uri)`). Integrators should use `IVincentAnchorRegistry` from `@kargain/vincent-contracts` (workspace-private; not published to npm).
+This registry implements the richer per-publisher epoch chain described in the maintainer handoff (merkleRoot + jsonlSha256 + manifestHash + parentRoot lineage). It extends the simplified sketch in [PROTOCOL.md §9](../PROTOCOL.md#9-anchoring-and-canon-selection) (`anchor(bytes32 manifestHash, string uri)`).
+
+- **TypeScript ABI / interface:** `IVincentAnchorRegistry` in `@kargain/vincent-contracts` (workspace-private; not published to npm)
+- **Runtime epoch reader:** `@kargain/vincent/anchor` (`createAnchorReader`) — published; optional `viem` peer
 
 ## Development
 

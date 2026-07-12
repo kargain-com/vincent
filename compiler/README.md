@@ -72,3 +72,13 @@ pnpm --filter @kargain/vincent-compiler build
 node compiler/scripts/gen-fixture.mjs
 node compiler/scripts/gen-merkle-vectors.mjs
 ```
+
+## Client decode stack
+
+Compiled epochs are consumed at runtime by `@kargain/vincent` (published npm package):
+
+1. **`@kargain/vincent/anchor`** — read `merkleRoot` and metadata from `VincentAnchorRegistry` (optional `viem` peer)
+2. **`@kargain/vincent/arweave`** — reference `getLeaf(wmi)` via ANS-104 tags (injectable)
+3. **`@kargain/vincent/decoder`** — Merkle-verify each leaf and decode VIN attributes
+
+This compiler package stays private; consumers verify manifest hashes and Merkle roots, not compile claims themselves.

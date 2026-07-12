@@ -29,7 +29,7 @@ Provenance: `regulatory/us-vpic`. License: `CC0-1.0`.
 
 - Path: `pipeline/.build/genesis-seed.jsonl` (gitignored build artifact)
 - Deterministic given `(dump bytes, signing key)` — stable ordering, no timestamps
-- Phase A (not here): re-run with the real genesis key, upload to Arweave, anchor on-chain
+- Phase A publish path: `@kargain/vincent-publish` (genesis upload + on-chain anchor); client decode via `@kargain/vincent/anchor` → `@kargain/vincent/arweave` → `@kargain/vincent/decoder`
 
 ### Prerequisites
 

@@ -21,9 +21,10 @@ All four commands must pass before you open a pull request. CI runs the same che
 
 | Path | Purpose |
 |------|---------|
-| `packages/vincent` | `@kargain/vincent` — published library (`.`, `./wmi`, `./protocol`, `./decoder`) |
+| `packages/vincent` | `@kargain/vincent` — published library (`.`, `./wmi`, `./protocol`, `./decoder`, `./arweave`, `./anchor`) |
 | `compiler/` | `@kargain/vincent-compiler` — private epoch compiler (workspace only) |
-| `pipeline/` | Private WMI generator (`@kargain/vincent-pipeline`) |
+| `pipeline/` | `@kargain/vincent-pipeline` — private WMI / seed generator (workspace only) |
+| `publish/` | `@kargain/vincent-publish` — private genesis publish tooling (workspace only) |
 | `docs/` | Normative protocol specification and governance documents |
 | `contracts/` | `@kargain/vincent-contracts` — private on-chain epoch registry (Hardhat 3) |
 
@@ -33,7 +34,7 @@ Package names use the `@kargain` npm scope. See [README.md](README.md) for the p
 
 - TypeScript strict mode; no `any`.
 - No `console.log` in package source (`packages/**/src`).
-- Zero runtime dependencies in the main entry (`.`) and `./wmi` subpaths; any exception must stay isolated to its own subpath (e.g. `./protocol`). Additional runtime dependencies are added deliberately and must be justified in the changeset; while the project has a single maintainer, no GitHub issue is required.
+- Zero runtime dependencies in the main entry (`.`) and `./wmi` subpaths; any exception must stay isolated to its own subpath (e.g. `./protocol`, optional `./anchor` with `viem` as an optional peer). Additional runtime dependencies are added deliberately and must be justified in the changeset; while the project has a single maintainer, no GitHub issue is required.
 - Behavior changes require tests.
 - Every package change requires a changeset: run `pnpm changeset` and commit the generated file.
 

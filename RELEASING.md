@@ -27,26 +27,40 @@ This document is the founder runbook for publishing `@kargain/vincent` to npm. P
    git commit -m "chore: release @kargain/vincent vX.Y.Z"
    ```
 
-4. **Publish manually.**
-
-   ```bash
-   pnpm --filter @kargain/vincent publish --access public
-   ```
-
-   Do not publish from automated CI until provenance and token handling are in place.
-
-5. **Verify on npm.** Confirm the new version appears at [npmjs.com/package/@kargain/vincent](https://www.npmjs.com/package/@kargain/vincent) and that the tarball contains `dist/`, `README.md`, and `LICENSE`.
-
-6. **Dry-run before publishing.** Inspect tarball contents and entry-point sizes:
+4. **Dry-run before publishing.** Inspect tarball contents and entry-point sizes:
 
    ```bash
    pnpm --filter @kargain/vincent pack
    ```
 
-   Confirm the tarball includes `dist/index.js` (main entry, no WMI data), `dist/wmi-export.js`, `dist/decoder-export.js`, `dist/wmi-core.generated.js`, and `dist/wmi-extended.generated.js`.
+   Confirm the tarball includes:
+   - `dist/index.js` (main entry, no WMI data)
+   - `dist/wmi-export.js`, `dist/wmi-core.generated.js`, `dist/wmi-extended.generated.js`
+   - `dist/decoder-export.js`, `dist/arweave-export.js`, `dist/anchor-export.js`
+   - `dist/protocol/index.js`
+   - `README.md`, `LICENSE`
+
+5. **Publish manually.**
+
+   ```bash
+   pnpm --filter @kargain/vincent publish --access public
+   ```
+
+   If the npm org requires 2FA, pass `--otp=123456`. Do not publish from automated CI until provenance and token handling are in place.
+
+6. **Verify on npm.** Confirm the new version appears at [npmjs.com/package/@kargain/vincent](https://www.npmjs.com/package/@kargain/vincent) and that subpath exports resolve (`/decoder`, `/arweave`, `/anchor`, etc.).
+
+## npm publish troubleshooting
+
+A **404 on PUT** for an existing scoped package usually means **auth or permissions**, not a missing package:
+
+1. Run `npm whoami` — if unauthorized, run `npm login`.
+2. Confirm your account is a maintainer on `@kargain/vincent` at [npmjs.com/package/@kargain/vincent](https://www.npmjs.com/package/@kargain/vincent).
+3. Use a publish-capable token (Automation or granular token with publish scope). Read-only tokens return 404.
+4. Pass `--otp=…` when 2FA is enabled on the org or account.
 
 ## Notes
 
-- **Decoder module:** `@kargain/vincent/decoder` is dependency-free. Consumers verify the epoch manifest, then pass the anchored `merkleRoot` and async `getLeaf(wmi)` provider. Core and WMI entry points remain dependency-free.
+- **Entry points:** `@kargain/vincent` ships six subpaths (`.`, `./wmi`, `./protocol`, `./decoder`, `./arweave`, `./anchor`). Core subpaths remain viem-free; `./anchor` lists `viem` as an optional peer.
+- **Decoder module:** `@kargain/vincent/decoder` is dependency-free. Consumers pass the anchored `merkleRoot` (from `./anchor` or a verified manifest) and an async `getLeaf(wmi)` provider (reference: `./arweave`).
 - **npm provenance:** Deferred until CI publishing is implemented.
-- **Dry-run before first publish:** Use `pnpm --filter @kargain/vincent pack` to inspect tarball contents without publishing. Verify layered WMI entry points (`dist/index.js`, `dist/wmi-export.js`, generated data modules) are present.
