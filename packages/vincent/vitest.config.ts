@@ -26,6 +26,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@kargain/vincent/arweave',
+        replacement: fileURLToPath(new URL('./src/arweave-export.ts', import.meta.url)),
+      },
+      {
         find: '@kargain/vincent/decoder',
         replacement: fileURLToPath(new URL('./src/decoder-export.ts', import.meta.url)),
       },

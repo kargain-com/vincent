@@ -1,6 +1,6 @@
 # @kargain/vincent
 
-Pure, deterministic functions over the VIN string — normalization, validation, check digit, model year, and coarse region. WMI lookup is a separate entry point with layered loading. The core, WMI, and decoder entry points have **zero runtime dependencies**; the protocol entry adds `@noble/hashes` and `@noble/curves` for EIP-191 signing. Attribute decoding uses a Merkle-authenticated epoch dataset (32-byte root + per-WMI leaves); fetching leaves is the caller's concern.
+Pure, deterministic functions over the VIN string — normalization, validation, check digit, model year, and coarse region. WMI lookup is a separate entry point with layered loading. The core, WMI, decoder, and arweave entry points have **zero runtime dependencies**; the protocol entry adds `@noble/hashes` and `@noble/curves` for EIP-191 signing. Attribute decoding uses a Merkle-authenticated epoch dataset (32-byte root + per-WMI leaves); fetching leaves is the caller's concern.
 
 ```bash
 npm install @kargain/vincent
@@ -14,6 +14,7 @@ npm install @kargain/vincent
 | `@kargain/vincent/wmi` | ~40 KiB core + ~132 KiB extended on demand | `lookupWmi`, `WmiInfo` |
 | `@kargain/vincent/protocol` | ~3 KiB entry + noble deps | JCS canonicalization, hashing, signing, parsing |
 | `@kargain/vincent/decoder` | dependency-free | `createDecoder`, `decoder.origin`, `decoder.decode`, `matchExpression` |
+| `@kargain/vincent/arweave` | dependency-free (global `fetch`) | `createArweaveGetLeaf`, `LeafNotFoundError` |
 
 Extended WMI data (6-character codes for small manufacturers, position 3 = `9`) loads via dynamic `import()` only when needed. Mass-manufacturer 3-character WMIs load lazily on the first `lookupWmi` call.
 
@@ -80,6 +81,16 @@ Implements [PROTOCOL.md](../../docs/PROTOCOL.md) §4.4 decoder resolution over a
 
 Conflicts are never guessed: ambiguous model years and overlapping pattern values surface as `ambiguous` / `yearDependent` with candidate lists.
 
+### `@kargain/vincent/arweave`
+
+Reference `getLeaf` provider that discovers per-WMI leaves via ANS-104 tag queries against an Arweave gateway. It uses global `fetch` only (injectable for tests) and works in both Node and the browser. `getLeaf` is injectable, so `./arweave` is only the reference backend — callers may supply a mirror, an in-memory cache, or any alternate source. The provider does not verify Merkle inclusion; `createDecoder` verifies every returned leaf against the anchored root.
+
+| Export | Description |
+|--------|-------------|
+| `createArweaveGetLeaf({ gatewayUrl, publisher, epoch, fetchImpl? })` | Returns a `getLeaf(leafKey)` that resolves `{ leaf, proof }` from the newest matching tagged transaction |
+| `LeafNotFoundError` | Thrown when no transaction matches owner + `App`/`Epoch`/`LeafKey` tags (decoder maps to `unknown-wmi`) |
+| Types | `ArweaveGetLeafOptions` |
+
 ## Usage
 
 ```ts
@@ -126,11 +137,17 @@ const parsed = parseClaim(JSON.parse(jsonText));
 
 ```ts
 import { createDecoder } from '@kargain/vincent/decoder';
+import { createArweaveGetLeaf } from '@kargain/vincent/arweave';
 
-// `merkleRoot` — from verified epoch manifest; `getLeaf` — caller-provided fetch (Arweave, memory, etc.)
+// `merkleRoot` — from a verified epoch manifest.
+// `getLeaf` — the reference Arweave provider; swap in any mirror/cache/backend.
 const decoder = createDecoder({
   merkleRoot: manifest.dataset.merkleRoot,
-  getLeaf: async (wmi) => fetchLeafAndProof(wmi),
+  getLeaf: createArweaveGetLeaf({
+    gatewayUrl: 'https://arweave.net',
+    publisher: manifest.publisher,
+    epoch: manifest.epoch,
+  }),
 });
 
 const origin = await decoder.origin('1FA12BBABG1234567');

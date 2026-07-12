@@ -11,7 +11,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose changes to these do
 
 ## Library
 
-Published npm package: [`@kargain/vincent`](../packages/vincent) — four entry points:
+Published npm package: [`@kargain/vincent`](../packages/vincent) — five entry points:
 
 | Subpath | Purpose |
 |---------|---------|
@@ -19,5 +19,6 @@ Published npm package: [`@kargain/vincent`](../packages/vincent) — four entry 
 | `@kargain/vincent/wmi` | Layered WMI lookup |
 | `@kargain/vincent/protocol` | Claim/manifest parsing, JCS, EIP-191 signing |
 | `@kargain/vincent/decoder` | Merkle-authenticated per-WMI leaf decoding via `createDecoder({ merkleRoot, getLeaf })` |
+| `@kargain/vincent/arweave` | Reference ANS-104 tag-query `getLeaf` provider via `createArweaveGetLeaf(...)` |
 
 See the [package README](../packages/vincent/README.md) for API tables and usage.

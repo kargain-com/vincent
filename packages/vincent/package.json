@@ -46,6 +46,10 @@
     "./decoder": {
       "types": "./dist/decoder-export.d.ts",
       "import": "./dist/decoder-export.js"
+    },
+    "./arweave": {
+      "types": "./dist/arweave-export.d.ts",
+      "import": "./dist/arweave-export.js"
     }
   },
   "dependencies": {
