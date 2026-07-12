@@ -9,11 +9,12 @@ export interface VerifyUploadedLeavesOptions {
   gatewayUrl: string;
   graphqlUrl: string;
   fetchImpl?: typeof fetch;
-  /** Total time to wait for GraphQL indexing before aborting anchor. */
+  /** Per-leaf time to wait for GraphQL indexing before aborting anchor. */
   timeoutMs?: number;
   /** Delay between leaf discovery attempts. */
   pollIntervalMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  onLeafVerified?: (completed: number, total: number) => void;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -74,10 +75,11 @@ export async function verifyUploadedLeaves(
     fetchImpl: options.fetchImpl,
   });
 
-  const deadline = Date.now() + timeoutMs;
   const leafKeys = [...options.epoch.leaves.keys()].sort((a, b) => a.localeCompare(b));
 
-  for (const leafKey of leafKeys) {
+  for (let index = 0; index < leafKeys.length; index++) {
+    const leafKey = leafKeys[index]!;
+    const deadline = Date.now() + timeoutMs;
     await waitForLeaf(
       getLeaf,
       leafKey,
@@ -86,5 +88,6 @@ export async function verifyUploadedLeaves(
       pollIntervalMs,
       sleep,
     );
+    options.onLeafVerified?.(index + 1, leafKeys.length);
   }
 }

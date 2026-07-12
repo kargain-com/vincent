@@ -53,10 +53,8 @@ export interface SimulateEpoch2MiniResult {
 function mockPreflightOptions(): EpochPreflightOptions {
   return {
     rpcUrl: 'http://mock-base-sepolia',
-    irysRpcUrl: 'http://mock-eth-sepolia',
     irysGraphqlUrl: 'https://mock.arweave.devnet.irys.test/graphql',
     getBalance: async () => parseEther('1'),
-    getIrysPaymentBalance: async () => parseEther('1'),
     probeIrysUploader: async () => {},
     probeIrysGraphql: async () => {},
   };

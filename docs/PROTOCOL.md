@@ -262,6 +262,7 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 
 - Default permanent store: **Arweave** (`ar://` URIs). Any content-addressed mirror (IPFS, HTTPS, torrent) is equally valid — the hash, not the location, is the identity.
 - The canonical JSONL dataset is uploaded as a separate artifact; its `ar://` URI appears in `dataset.uris`. Per-WMI leaves are stored as ANS-104 data items tagged by `Epoch` and `LeafKey` (see §7.2); they are not discovered via directory listing or enumerated URIs.
+- **Devnet uploads (reference tooling):** `@kargain/vincent-publish` pays Irys via **`base-eth` on Base Sepolia** against `devnet.irys.xyz` — the same token/RPC pattern as Kargain passport uploads. One wallet funds both the on-chain anchor and permanent storage; do not use Ethereum Sepolia for Irys funding.
 - Clients MUST verify `jsonlSha256` and `merkleRoot` (and each fetched leaf via its Merkle proof against the anchored root) after every fetch, regardless of source.
 
 ### 8.1 Publisher roles (append-only epoch chains)

@@ -83,7 +83,7 @@ describe('genesis publish full offline simulation', () => {
     ).rejects.toThrow(/already has 1 on-chain epoch/);
   });
 
-  it('blocks at preflight when Base Sepolia balance is insufficient', async () => {
+  it('blocks at preflight when Base Sepolia balance is insufficient for gas and Irys', async () => {
     await expect(
       preflightGenesisPublish({
         privateKeyHex: TEST_PRIVATE_KEY,
@@ -94,19 +94,6 @@ describe('genesis publish full offline simulation', () => {
         }),
       }),
     ).rejects.toThrow(/Insufficient Base Sepolia balance/);
-  });
-
-  it('blocks at preflight when Ethereum Sepolia Irys balance is insufficient', async () => {
-    await expect(
-      preflightGenesisPublish({
-        privateKeyHex: TEST_PRIVATE_KEY,
-        publisher: TEST_PUBLISHER,
-        epochCountReader: createMockChainPublisher(),
-        preflight: mockPreflightOverrides({
-          getIrysPaymentBalance: async () => 0n,
-        }),
-      }),
-    ).rejects.toThrow(/Insufficient Ethereum Sepolia balance for Irys uploads/);
   });
 
   it('blocks at preflight when Irys GraphQL is unavailable', async () => {

@@ -41,9 +41,24 @@ export interface PublishEpochDeps {
   preflight?: EpochPreflightOptions;
   /** When set, verify GraphQL leaf indexing before on-chain anchor. */
   leafIndexCheck?: LeafIndexCheckOptions;
+  /** Optional hook for long-running upload progress (e.g. CLI). */
+  onProgress?: (progress: PublishEpochProgress) => void;
 }
 
 export type PublishEpochReport = PublishGenesisReport;
+
+export type PublishEpochPhase =
+  | 'leaves'
+  | 'jsonl'
+  | 'manifest'
+  | 'index-check'
+  | 'anchor';
+
+export interface PublishEpochProgress {
+  phase: PublishEpochPhase;
+  completed: number;
+  total: number;
+}
 
 function utf8Bytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
@@ -86,19 +101,30 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
   const { epochNumber, parentRootBytes32, parentRootContentId } = resolved;
 
   const sortedLeaves = [...deps.epoch.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
-  for (const [leafKey, entry] of sortedLeaves) {
+  const leafTotal = sortedLeaves.length;
+  deps.onProgress?.({ phase: 'leaves', completed: 0, total: leafTotal });
+
+  for (let index = 0; index < sortedLeaves.length; index++) {
+    const [leafKey, entry] = sortedLeaves[index]!;
     await deps.uploader.upload(utf8Bytes(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })), [
       appTag(),
       epochTag(epochNumber),
       { name: 'LeafKey', value: leafKey },
     ]);
+    deps.onProgress?.({
+      phase: 'leaves',
+      completed: index + 1,
+      total: leafTotal,
+    });
   }
 
+  deps.onProgress?.({ phase: 'jsonl', completed: 0, total: 1 });
   const jsonlUpload = await deps.uploader.upload(gzipSync(utf8Bytes(deps.epoch.jsonl)), [
     appTag(),
     epochTag(epochNumber),
     { name: 'Type', value: 'jsonl' },
   ]);
+  deps.onProgress?.({ phase: 'jsonl', completed: 1, total: 1 });
   const jsonlUri = jsonlUpload.uri;
 
   const unsigned = buildManifest({
@@ -117,13 +143,18 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
   const signed = signManifest(unsigned, deps.signerKeyHex);
   const hash = manifestHash(signed);
 
+  deps.onProgress?.({ phase: 'manifest', completed: 0, total: 1 });
   const manifestUpload = await deps.uploader.upload(utf8Bytes(JSON.stringify(signed)), [
     appTag(),
     epochTag(epochNumber),
     { name: 'Type', value: 'manifest' },
   ]);
 
+  deps.onProgress?.({ phase: 'manifest', completed: 1, total: 1 });
+
   if (deps.leafIndexCheck !== undefined) {
+    const indexTotal = deps.epoch.leaves.size;
+    deps.onProgress?.({ phase: 'index-check', completed: 0, total: indexTotal });
     await verifyUploadedLeaves({
       epoch: deps.epoch,
       publisher,
@@ -134,9 +165,17 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
       timeoutMs: deps.leafIndexCheck.timeoutMs,
       pollIntervalMs: deps.leafIndexCheck.pollIntervalMs,
       sleep: deps.leafIndexCheck.sleep,
+      onLeafVerified: (completed, total) => {
+        deps.onProgress?.({
+          phase: 'index-check',
+          completed,
+          total,
+        });
+      },
     });
   }
 
+  deps.onProgress?.({ phase: 'anchor', completed: 0, total: 1 });
   const txHash = await deps.chainPublisher.publishEpoch({
     merkleRoot: sha256ContentIdToBytes32(deps.epoch.merkleRoot),
     jsonlSha256: sha256ContentIdToBytes32(deps.epoch.jsonlSha256),
@@ -144,6 +183,7 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
     parentRoot: parentRootBytes32,
     manifestUri: manifestUpload.uri,
   });
+  deps.onProgress?.({ phase: 'anchor', completed: 1, total: 1 });
 
   return {
     publisher,

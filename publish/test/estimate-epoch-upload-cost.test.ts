@@ -3,9 +3,10 @@ import { parseEther } from 'viem';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  assertSufficientUploadBudget,
   checkUploadBudgetSufficient,
   computeEpochUploadByteSizes,
+  DEFAULT_IRYS_FUNDING_GAS_RESERVE_WEI,
+  ensureIrysUploadBudget,
 } from '../src/estimate-epoch-upload-cost.js';
 import { preflightEpochPublish } from '../src/preflight-genesis-publish.js';
 import { TEST_PRIVATE_KEY, TEST_PUBLISHER } from '../src/constants.js';
@@ -24,7 +25,7 @@ describe('estimate epoch upload cost', () => {
     expect(sizes.every((size) => size > 0)).toBe(true);
   });
 
-  it('requires buffered headroom over quoted cost', () => {
+  it('requires wallet headroom to fund an unfunded Irys deficit', () => {
     const result = checkUploadBudgetSufficient({
       estimatedCostWei: parseEther('0.1'),
       irysLoadedBalanceWei: 0n,
@@ -35,15 +36,27 @@ describe('estimate epoch upload cost', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.requiredWei).toBe(parseEther('0.11'));
-      expect(result.availableWei).toBe(parseEther('0.05'));
+      expect(result.deficitWei).toBe(parseEther('0.11'));
+      expect(result.walletNeededWei).toBe(parseEther('0.11') + DEFAULT_IRYS_FUNDING_GAS_RESERVE_WEI);
     }
   });
 
-  it('passes when funded plus wallet cover quoted cost with buffer', () => {
+  it('passes when Irys is already funded for the quoted cost', () => {
+    const result = checkUploadBudgetSufficient({
+      estimatedCostWei: parseEther('0.1'),
+      irysLoadedBalanceWei: parseEther('0.12'),
+      walletBalanceWei: 0n,
+      bufferMultiplier: 1.1,
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('passes when the wallet can fund the remaining deficit', () => {
     const result = checkUploadBudgetSufficient({
       estimatedCostWei: parseEther('0.1'),
       irysLoadedBalanceWei: parseEther('0.05'),
-      walletBalanceWei: parseEther('0.06'),
+      walletBalanceWei: parseEther('0.07'),
       bufferMultiplier: 1.1,
     });
 
@@ -53,8 +66,8 @@ describe('estimate epoch upload cost', () => {
   it('applies the default safety buffer when none is provided', () => {
     const result = checkUploadBudgetSufficient({
       estimatedCostWei: 10n,
-      irysLoadedBalanceWei: 0n,
-      walletBalanceWei: 11n,
+      irysLoadedBalanceWei: 11n,
+      walletBalanceWei: 0n,
     });
 
     expect(result).toEqual({ ok: true });
@@ -85,7 +98,7 @@ describe('estimate epoch upload cost', () => {
     }));
 
     await expect(
-      assertSufficientUploadBudget({
+      ensureIrysUploadBudget({
         privateKeyHex: TEST_PRIVATE_KEY,
         rpcUrl: 'http://mock-eth-sepolia',
         epoch: built.value,
@@ -95,22 +108,28 @@ describe('estimate epoch upload cost', () => {
         irysClientFactory: async () => ({
           utils: { estimateFolderPrice: mockEstimate },
           getLoadedBalance: mockLoaded,
+          fund: vi.fn(),
         }),
       }),
-    ).rejects.toThrow(/Insufficient Ethereum Sepolia \/ Irys upload budget/);
+    ).rejects.toThrow(/Insufficient Base Sepolia \/ Irys upload budget/);
 
     expect(mockEstimate).toHaveBeenCalled();
     expect(mockLoaded).toHaveBeenCalled();
   });
 
-  it('passes when only the upload cost override is provided', async () => {
+  it('funds Irys when the wallet can cover the deficit', async () => {
     const built = compile(loadGenesisMiniClaims(), {});
     if (!built.ok) {
       throw new Error(built.error.message);
     }
 
+    let loaded = 0n;
+    const fund = vi.fn(async (amount: bigint) => {
+      loaded += amount;
+    });
+
     await expect(
-      assertSufficientUploadBudget({
+      ensureIrysUploadBudget({
         privateKeyHex: TEST_PRIVATE_KEY,
         rpcUrl: 'http://mock-eth-sepolia',
         epoch: built.value,
@@ -118,28 +137,43 @@ describe('estimate epoch upload cost', () => {
         parentRootContentId: null,
         walletBalanceWei: parseEther('1'),
         estimateUploadCostWei: async () => parseEther('0.01'),
-        irysClientFactory: async () => ({
-          utils: {
-            estimateFolderPrice: async () => {
-              throw new Error('should not quote');
-            },
-          },
-          getLoadedBalance: async () => ({
-            integerValue: () => ({ toString: () => '0' }),
-          }),
-        }),
+        getIrysLoadedBalance: async () => loaded,
+        fundIrys: fund,
       }),
     ).resolves.toBeUndefined();
+
+    expect(fund).toHaveBeenCalledOnce();
+    expect(loaded).toBe(parseEther('0.011'));
   });
 
-  it('passes when Irys quote fits funded plus wallet balance', async () => {
+  it('passes when only the upload cost override is provided and Irys is already funded', async () => {
     const built = compile(loadGenesisMiniClaims(), {});
     if (!built.ok) {
       throw new Error(built.error.message);
     }
 
     await expect(
-      assertSufficientUploadBudget({
+      ensureIrysUploadBudget({
+        privateKeyHex: TEST_PRIVATE_KEY,
+        rpcUrl: 'http://mock-eth-sepolia',
+        epoch: built.value,
+        epochNumber: 1,
+        parentRootContentId: null,
+        walletBalanceWei: parseEther('1'),
+        estimateUploadCostWei: async () => parseEther('0.01'),
+        getIrysLoadedBalance: async () => parseEther('0.02'),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails when funding does not raise the Irys balance enough', async () => {
+    const built = compile(loadGenesisMiniClaims(), {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    await expect(
+      ensureIrysUploadBudget({
         privateKeyHex: TEST_PRIVATE_KEY,
         rpcUrl: 'http://mock-eth-sepolia',
         epoch: built.value,
@@ -148,29 +182,46 @@ describe('estimate epoch upload cost', () => {
         walletBalanceWei: parseEther('1'),
         estimateUploadCostWei: async () => parseEther('0.01'),
         getIrysLoadedBalance: async () => 0n,
+        fundIrys: async () => {},
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(/Irys funding incomplete/);
+  });
 
-    await expect(
-      assertSufficientUploadBudget({
-        privateKeyHex: TEST_PRIVATE_KEY,
-        rpcUrl: 'http://mock-eth-sepolia',
-        epoch: built.value,
-        epochNumber: 2,
-        parentRootContentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        walletBalanceWei: parseEther('1'),
-        irysClientFactory: async () => ({
-          utils: {
-            estimateFolderPrice: async () => ({
-              integerValue: () => ({ toString: () => parseEther('0.01').toString() }),
-            }),
-          },
-          getLoadedBalance: async () => ({
-            integerValue: () => ({ toString: () => parseEther('0.005').toString() }),
+  it('uses the default Irys client when only quote overrides are absent', async () => {
+    const built = compile(loadGenesisMiniClaims(), {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    let loaded = 0n;
+    const fundAccount = vi.fn(async (_client, amount: bigint) => {
+      loaded = amount;
+    });
+
+    await ensureIrysUploadBudget({
+      privateKeyHex: TEST_PRIVATE_KEY,
+      rpcUrl: 'http://mock-eth-sepolia',
+      epoch: built.value,
+      epochNumber: 2,
+      parentRootContentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      walletBalanceWei: parseEther('1'),
+      onFund: () => {},
+      estimateUploadCostWei: async () => parseEther('0.01'),
+      getIrysLoadedBalance: async () => loaded,
+      fundIrysDevnetAccount: fundAccount,
+      irysClientFactory: async () => ({
+        utils: {
+          estimateFolderPrice: async () => ({
+            integerValue: () => ({ toString: () => parseEther('0.01').toString() }),
           }),
+        },
+        getLoadedBalance: async () => ({
+          integerValue: () => ({ toString: () => loaded.toString() }),
         }),
       }),
-    ).resolves.toBeUndefined();
+    });
+
+    expect(fundAccount).toHaveBeenCalledOnce();
   });
 });
 
@@ -189,7 +240,7 @@ describe('preflight upload budget', () => {
         preflight: {
           rpcUrl: 'http://localhost:8545',
           getBalance: async () => parseEther('1'),
-          getIrysPaymentBalance: async () => parseEther('0.001'),
+          getBalance: async () => parseEther('0.001'),
           probeIrysUploader: async () => {},
           uploadBudget: {
             epoch: built.value,
@@ -200,6 +251,6 @@ describe('preflight upload budget', () => {
           },
         },
       }),
-    ).rejects.toThrow(/Insufficient Ethereum Sepolia \/ Irys upload budget/);
+    ).rejects.toThrow(/Insufficient Base Sepolia \/ Irys upload budget/);
   });
 });

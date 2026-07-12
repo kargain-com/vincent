@@ -17,14 +17,15 @@
     "test": "vitest run --no-file-parallelism",
     "prevalidate:full-sim": "pnpm --filter @kargain/vincent-contracts build",
     "validate:full-sim": "node --max-old-space-size=8192 ./node_modules/vitest/vitest.mjs run --config vitest.full-sim.config.ts --no-file-parallelism",
-    "publish:epoch": "node dist/cli/publish-epoch.js",
-    "publish:genesis": "node dist/cli/publish-epoch.js --genesis"
+    "publish:epoch": "pnpm run build && node dist/cli/publish-epoch.js",
+    "publish:genesis": "pnpm run build && node dist/cli/publish-epoch.js --genesis"
   },
   "dependencies": {
     "@irys/upload": "^0.0.3",
     "@irys/upload-ethereum": "^0.0.3",
     "@kargain/vincent": "workspace:*",
     "@kargain/vincent-compiler": "workspace:*",
+    "bignumber.js": "^9.1.2",
     "dotenv": "^16.4.7",
     "viem": "^2.31.0"
   },

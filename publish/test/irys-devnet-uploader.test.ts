@@ -5,17 +5,19 @@ const mocks = vi.hoisted(() => {
   const builder = {
     withWallet: vi.fn(),
     withRpc: vi.fn(),
+    bundlerUrl: vi.fn(),
     devnet: vi.fn(),
     upload,
   };
   builder.withWallet.mockReturnValue(builder);
   builder.withRpc.mockReturnValue(builder);
+  builder.bundlerUrl.mockReturnValue(builder);
   builder.devnet.mockResolvedValue(builder);
   return { builder, upload, Uploader: vi.fn(() => builder) };
 });
 
 vi.mock('@irys/upload', () => ({ Uploader: mocks.Uploader }));
-vi.mock('@irys/upload-ethereum', () => ({ Ethereum: class Ethereum {} }));
+vi.mock('@irys/upload-ethereum', () => ({ BaseEth: class BaseEth {} }));
 
 import { createIrysDevnetUploader } from '../src/adapters/irys-devnet-uploader.js';
 
@@ -24,17 +26,19 @@ describe('createIrysDevnetUploader', () => {
     vi.clearAllMocks();
     mocks.builder.withWallet.mockReturnValue(mocks.builder);
     mocks.builder.withRpc.mockReturnValue(mocks.builder);
+    mocks.builder.bundlerUrl.mockReturnValue(mocks.builder);
     mocks.builder.devnet.mockResolvedValue(mocks.builder);
   });
 
-  it('uses the EVM RPC and explicitly selects Irys devnet', async () => {
+  it('uses Base Sepolia RPC, bundler URL, and Irys devnet', async () => {
     const uploader = await createIrysDevnetUploader({
       privateKeyHex: '0x1234',
-      rpcUrl: 'https://rpc.sepolia.org',
+      rpcUrl: 'https://sepolia.base.org',
     });
 
     expect(mocks.builder.withWallet).toHaveBeenCalledWith('0x1234');
-    expect(mocks.builder.withRpc).toHaveBeenCalledWith('https://rpc.sepolia.org');
+    expect(mocks.builder.bundlerUrl).toHaveBeenCalledWith('https://devnet.irys.xyz');
+    expect(mocks.builder.withRpc).toHaveBeenCalledWith('https://sepolia.base.org');
     expect(mocks.builder.devnet).toHaveBeenCalledOnce();
 
     mocks.upload.mockResolvedValue({ id: 'tx-1' });

@@ -11,17 +11,19 @@ import {
   toChecksumAddress,
   type Claim,
 } from '@kargain/vincent/protocol';
+import { formatEther } from 'viem';
 
 import { createBaseSepoliaPublisher, createBaseSepoliaReader } from '../adapters/base-sepolia-publisher.js';
 import { createIrysDevnetUploader } from '../adapters/irys-devnet-uploader.js';
-import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL, DEFAULT_ETH_SEPOLIA_RPC_URL } from '../constants.js';
+import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL } from '../constants.js';
 import { loadFullSeedClaims } from '../load-full-seed-claims.js';
-import { publishEpoch } from '../publish-epoch.js';
+import { preflightEpochPublish } from '../preflight-genesis-publish.js';
+import { publishEpoch, type PublishEpochProgress } from '../publish-epoch.js';
+import type { UploadBudgetQuote } from '../estimate-epoch-upload-cost.js';
 import { resolveEpochParent } from '../resolve-epoch-parent.js';
 import { manifestHash } from '../sign-manifest.js';
 import {
   assertBaseSepoliaRpcUrl,
-  assertEthereumSepoliaRpcUrl,
   assertIrysGraphqlUrl,
 } from '../validate-env-urls.js';
 import { verifyGenesisPublish } from '../verify-genesis-publish.js';
@@ -100,6 +102,18 @@ function requireEnv(name: string): string {
 function optionalEnv(name: string, fallback: string): string {
   const value = process.env[name];
   return value === undefined || value.length === 0 ? fallback : value;
+}
+
+function optionalFundTxId(): `0x${string}` | undefined {
+  const value = process.env.VINCENT_IRYS_RECOVER_FUND_TX;
+  if (value === undefined || value.length === 0) {
+    return undefined;
+  }
+  const normalized = (value.startsWith('0x') ? value : `0x${value}`) as `0x${string}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw new Error('VINCENT_IRYS_RECOVER_FUND_TX must be a 32-byte hex transaction hash');
+  }
+  return normalized;
 }
 
 function normalizePrivateKey(value: string): `0x${string}` {
@@ -189,12 +203,72 @@ async function runVerifyOnly(options: CliOptions): Promise<void> {
   }
 }
 
+function formatProgressPercent(completed: number, total: number): string {
+  if (total <= 0) {
+    return '0%';
+  }
+  return `${((completed / total) * 100).toFixed(1)}%`;
+}
+
+function createPublishProgressLogger(leafLogInterval: number) {
+  let lastLeafLogAt = 0;
+
+  return (progress: PublishEpochProgress): void => {
+    switch (progress.phase) {
+      case 'leaves': {
+        const shouldLog =
+          progress.completed === 0 ||
+          progress.completed === progress.total ||
+          progress.completed - lastLeafLogAt >= leafLogInterval;
+        if (!shouldLog) {
+          return;
+        }
+        lastLeafLogAt = progress.completed;
+        process.stdout.write(
+          `Uploading leaves ${String(progress.completed)}/${String(progress.total)} ` +
+            `(${formatProgressPercent(progress.completed, progress.total)})...\n`,
+        );
+        return;
+      }
+      case 'jsonl':
+        if (progress.completed === 0) {
+          process.stdout.write('Uploading JSONL...\n');
+        }
+        return;
+      case 'manifest':
+        if (progress.completed === 0) {
+          process.stdout.write('Uploading manifest...\n');
+        }
+        return;
+      case 'index-check': {
+        const shouldLog =
+          progress.completed === 0 ||
+          progress.completed === progress.total ||
+          progress.completed % Math.max(leafLogInterval, 1) === 0;
+        if (!shouldLog) {
+          return;
+        }
+        process.stdout.write(
+          `Verifying GraphQL index ${String(progress.completed)}/${String(progress.total)} ` +
+            `(${formatProgressPercent(progress.completed, progress.total)})...\n`,
+        );
+        return;
+      }
+      case 'anchor':
+        if (progress.completed === 0) {
+          process.stdout.write('Anchoring on Base Sepolia...\n');
+        }
+        return;
+      default:
+        return;
+    }
+  };
+}
+
 async function runPublish(options: CliOptions): Promise<void> {
   const privateKey = normalizePrivateKey(requireEnv('VINCENT_GENESIS_PRIVATE_KEY'));
   const rpcUrl = requireEnv('BASE_SEPOLIA_RPC_URL');
-  const irysRpcUrl = optionalEnv('IRYS_SEPOLIA_RPC_URL', DEFAULT_ETH_SEPOLIA_RPC_URL);
   assertBaseSepoliaRpcUrl(rpcUrl, 'BASE_SEPOLIA_RPC_URL');
-  assertEthereumSepoliaRpcUrl(irysRpcUrl, 'IRYS_SEPOLIA_RPC_URL');
   const irysGatewayUrl = optionalEnv('IRYS_GATEWAY_URL', IRYS_GATEWAY_URL);
   const irysGraphqlUrl = optionalEnv('IRYS_GRAPHQL_URL', IRYS_GRAPHQL_URL);
   assertIrysGraphqlUrl(irysGraphqlUrl, 'IRYS_GRAPHQL_URL');
@@ -205,7 +279,7 @@ async function runPublish(options: CliOptions): Promise<void> {
     rpcUrl,
   });
 
-  const preflightOptions = { rpcUrl, irysRpcUrl, irysGraphqlUrl };
+  const preflightOptions = { rpcUrl, irysGraphqlUrl };
   const resolved = await resolveEpochParent(chainPublisher, publisher as `0x${string}`);
   const mode =
     resolved.epochNumber === 1
@@ -231,35 +305,76 @@ async function runPublish(options: CliOptions): Promise<void> {
     throw new Error(built.error.message);
   }
 
-  process.stdout.write(
-    `Upload budget preflight (${String(built.value.leaves.size)} leaves)...\n`,
-  );
+  const uploadBudget = {
+    epoch: built.value,
+    epochNumber: resolved.epochNumber,
+    parentRootContentId: resolved.parentRootContentId,
+    recoverFundTxId: optionalFundTxId(),
+    onStart: (leafCount: number) => {
+      process.stdout.write(
+        `Upload budget preflight (${String(leafCount)} leaves)...\n`,
+      );
+    },
+    onQuote: (quote: UploadBudgetQuote) => {
+      process.stdout.write(
+        `Irys quote: ${formatEther(quote.estimatedCostWei)} ETH ` +
+          `(need ${formatEther(quote.requiredWei)} ETH on Irys, ` +
+          `funded ${formatEther(quote.irysLoadedBalanceWei)} ETH, ` +
+          `Base Sepolia wallet ${formatEther(quote.walletBalanceWei)} ETH` +
+          (quote.deficitWei > 0n ? `, fund ${formatEther(quote.deficitWei)} ETH` : '') +
+          `)\n`,
+      );
+    },
+    onFund: (deficitWei: bigint) => {
+      process.stdout.write(
+        `Funding Irys account with ${deficitWei.toString()} wei from Base Sepolia...\n`,
+      );
+    },
+    onFundTxSubmitted: (txId: `0x${string}`) => {
+      process.stdout.write(
+        `Submitted Irys fund tx ${txId}; waiting for Base Sepolia confirmation...\n`,
+      );
+    },
+  };
+
+  if (uploadBudget.recoverFundTxId !== undefined) {
+    process.stdout.write(
+      `Recovering prior Irys fund tx ${uploadBudget.recoverFundTxId}...\n`,
+    );
+  }
+
+  await preflightEpochPublish({
+    privateKeyHex: privateKey,
+    publisher,
+    epochCountReader: chainPublisher,
+    readLatestEpoch: chainPublisher.readLatestEpoch.bind(chainPublisher),
+    preflight: {
+      ...preflightOptions,
+      requireGenesis: options.genesis ? true : undefined,
+      targetEpochNumber: resolved.epochNumber,
+      uploadBudget,
+    },
+  });
 
   const uploader = await createIrysDevnetUploader({
     privateKeyHex: privateKey,
-    rpcUrl: irysRpcUrl,
+    rpcUrl,
   });
 
-  process.stdout.write('Publishing epoch...\n');
+  process.stdout.write(
+    `Publishing epoch (${String(built.value.leaves.size)} leaves; sequential Irys uploads may take hours)...\n`,
+  );
   const report = await publishEpoch({
     epoch: built.value,
     signerKeyHex: privateKey,
     uploader,
     chainPublisher,
     requireGenesis: options.genesis ? true : undefined,
-    preflight: {
-      ...preflightOptions,
-      requireGenesis: options.genesis ? true : undefined,
-      targetEpochNumber: resolved.epochNumber,
-      uploadBudget: {
-        epoch: built.value,
-        epochNumber: resolved.epochNumber,
-        parentRootContentId: resolved.parentRootContentId,
-      },
-    },
+    onProgress: createPublishProgressLogger(options.fixture === 'full' ? 250 : 1),
     leafIndexCheck: {
       gatewayUrl: irysGatewayUrl,
       graphqlUrl: irysGraphqlUrl,
+      timeoutMs: options.fixture === 'full' ? 120_000 : undefined,
     },
   });
 

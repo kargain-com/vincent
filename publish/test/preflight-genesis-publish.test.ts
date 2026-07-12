@@ -7,9 +7,7 @@ import { createMockChainPublisher } from './mock-chain-publisher.js';
 
 const PREFLIGHT_BASE = {
   rpcUrl: 'http://localhost:8545',
-  irysRpcUrl: 'http://localhost:9545',
   getBalance: async () => parseEther('1'),
-  getIrysPaymentBalance: async () => parseEther('1'),
   probeIrysUploader: async () => {},
   probeIrysGraphql: async () => {},
 };
@@ -100,36 +98,6 @@ describe('preflightGenesisPublish', () => {
         preflight: PREFLIGHT_BASE,
       }),
     ).rejects.toThrow(/Registry epochCount check failed: rpc down/);
-  });
-
-  it('rejects when Irys payment RPC lookup fails', async () => {
-    await expect(
-      preflightGenesisPublish({
-        privateKeyHex: TEST_PRIVATE_KEY,
-        publisher: TEST_PUBLISHER,
-        epochCountReader: createMockChainPublisher(),
-        preflight: {
-          ...PREFLIGHT_BASE,
-          getIrysPaymentBalance: async () => {
-            throw new Error('connection refused');
-          },
-        },
-      }),
-    ).rejects.toThrow(/Ethereum Sepolia RPC unavailable for Irys/);
-  });
-
-  it('rejects when Irys payment balance is below minimum', async () => {
-    await expect(
-      preflightGenesisPublish({
-        privateKeyHex: TEST_PRIVATE_KEY,
-        publisher: TEST_PUBLISHER,
-        epochCountReader: createMockChainPublisher(),
-        preflight: {
-          ...PREFLIGHT_BASE,
-          getIrysPaymentBalance: async () => 0n,
-        },
-      }),
-    ).rejects.toThrow(/Insufficient Ethereum Sepolia balance for Irys uploads/);
   });
 
   it('rejects when Irys probe fails', async () => {

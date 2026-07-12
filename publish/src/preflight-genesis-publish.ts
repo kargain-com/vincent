@@ -1,30 +1,25 @@
 import { addressFromPrivateKey, toChecksumAddress } from '@kargain/vincent/protocol';
 import { createPublicClient, http, parseEther } from 'viem';
-import { baseSepolia, sepolia } from 'viem/chains';
+import { baseSepolia } from 'viem/chains';
 
 import { createIrysDevnetUploader } from './adapters/irys-devnet-uploader.js';
 import { assertGenesisPublisherAvailable, type EpochCountReader } from './assert-genesis-publisher.js';
 import {
-  assertSufficientUploadBudget,
-  type AssertSufficientUploadBudgetOptions,
+  ensureIrysUploadBudget,
+  type EnsureIrysUploadBudgetOptions,
 } from './estimate-epoch-upload-cost.js';
 import type { EpochChainReader } from './resolve-epoch-parent.js';
 import type { EpochBuild } from '@kargain/vincent-compiler';
 
 /** Minimum Base Sepolia balance required before any permanent Arweave/Irys uploads. */
 export const DEFAULT_MIN_CHAIN_BALANCE_WEI = parseEther('0.0001');
-export const DEFAULT_MIN_IRYS_PAYMENT_BALANCE_WEI = parseEther('0.0001');
 
 export interface GenesisPreflightOptions {
   rpcUrl: string;
-  irysRpcUrl?: string;
   irysGraphqlUrl?: string;
   minChainBalanceWei?: bigint;
-  minIrysPaymentBalanceWei?: bigint;
-  /** Test override for RPC balance lookup. */
+  /** Test override for Base Sepolia balance lookup (anchor gas + Irys funding). */
   getBalance?: (publisher: `0x${string}`) => Promise<bigint>;
-  /** Test override for Ethereum Sepolia balance lookup used by Irys. */
-  getIrysPaymentBalance?: (publisher: `0x${string}`) => Promise<bigint>;
   /** Test override for Irys wallet/RPC initialization (must not upload). */
   probeIrysUploader?: () => Promise<void>;
   /** Test override for Irys GraphQL availability. */
@@ -36,8 +31,16 @@ export interface EpochUploadBudgetPreflight {
   epochNumber: number;
   parentRootContentId: string | null;
   bufferMultiplier?: number;
-  estimateUploadCostWei?: AssertSufficientUploadBudgetOptions['estimateUploadCostWei'];
-  getIrysLoadedBalance?: AssertSufficientUploadBudgetOptions['getIrysLoadedBalance'];
+  fundingGasReserveWei?: bigint;
+  estimateUploadCostWei?: EnsureIrysUploadBudgetOptions['estimateUploadCostWei'];
+  getIrysLoadedBalance?: EnsureIrysUploadBudgetOptions['getIrysLoadedBalance'];
+  fundIrys?: EnsureIrysUploadBudgetOptions['fundIrys'];
+  onFund?: EnsureIrysUploadBudgetOptions['onFund'];
+  onQuote?: EnsureIrysUploadBudgetOptions['onQuote'];
+  recoverFundTxId?: EnsureIrysUploadBudgetOptions['recoverFundTxId'];
+  onFundTxSubmitted?: EnsureIrysUploadBudgetOptions['onFundTxSubmitted'];
+  /** Optional hook when upload-budget quoting begins (e.g. CLI progress). */
+  onStart?: (leafCount: number) => void;
 }
 
 export interface EpochPreflightOptions extends GenesisPreflightOptions {
@@ -59,17 +62,6 @@ async function defaultGetBalance(
 ): Promise<bigint> {
   const client = createPublicClient({
     chain: baseSepolia,
-    transport: http(rpcUrl),
-  });
-  return client.getBalance({ address: publisher });
-}
-
-async function defaultGetIrysPaymentBalance(
-  rpcUrl: string,
-  publisher: `0x${string}`,
-): Promise<bigint> {
-  const client = createPublicClient({
-    chain: sepolia,
     transport: http(rpcUrl),
   });
   return client.getBalance({ address: publisher });
@@ -185,7 +177,7 @@ async function runSharedPreflight(args: {
   privateKeyHex: `0x${string}`;
   publisher: string;
   preflight: EpochPreflightOptions;
-}): Promise<{ irysPaymentBalanceWei: bigint }> {
+}): Promise<{ walletBalanceWei: bigint }> {
   const publisher = toChecksumAddress(args.publisher);
   const derivedPublisher = toChecksumAddress(addressFromPrivateKey(args.privateKeyHex));
   if (derivedPublisher !== publisher) {
@@ -212,44 +204,21 @@ async function runSharedPreflight(args: {
   if (balance < minBalance) {
     throw new Error(
       `Insufficient Base Sepolia balance for ${publisher}: ` +
-        `have ${balance.toString()} wei, need at least ${minBalance.toString()} wei for publishEpoch gas`,
-    );
-  }
-
-  const irysRpcUrl = args.preflight.irysRpcUrl ?? args.preflight.rpcUrl;
-  const minIrysBalance =
-    args.preflight.minIrysPaymentBalanceWei ?? DEFAULT_MIN_IRYS_PAYMENT_BALANCE_WEI;
-  const getIrysBalance =
-    args.preflight.getIrysPaymentBalance ??
-    ((address: `0x${string}`) => defaultGetIrysPaymentBalance(irysRpcUrl, address));
-  let irysBalance: bigint;
-  try {
-    irysBalance = await getIrysBalance(publisher as `0x${string}`);
-  } catch (error) {
-    throw new Error(
-      `Ethereum Sepolia RPC unavailable for Irys (${irysRpcUrl}): ${formatError(error)}`,
-      { cause: error },
-    );
-  }
-  if (irysBalance < minIrysBalance) {
-    throw new Error(
-      `Insufficient Ethereum Sepolia balance for Irys uploads from ${publisher}: ` +
-        `have ${irysBalance.toString()} wei, need at least ${minIrysBalance.toString()} wei`,
+        `have ${balance.toString()} wei, need at least ${minBalance.toString()} wei ` +
+        `for publishEpoch gas and Irys uploads`,
     );
   }
 
   const probeIrys =
     args.preflight.probeIrysUploader ??
-    (() => defaultProbeIrysUploader(args.privateKeyHex, irysRpcUrl));
+    (() => defaultProbeIrysUploader(args.privateKeyHex, args.preflight.rpcUrl));
 
-  if (probeIrys !== undefined) {
-    try {
-      await probeIrys();
-    } catch (error) {
-      throw new Error(`Irys devnet uploader unavailable: ${formatError(error)}`, {
-        cause: error,
-      });
-    }
+  try {
+    await probeIrys();
+  } catch (error) {
+    throw new Error(`Irys devnet uploader unavailable: ${formatError(error)}`, {
+      cause: error,
+    });
   }
 
   const targetEpochNumber = args.preflight.targetEpochNumber ?? 1;
@@ -270,7 +239,7 @@ async function runSharedPreflight(args: {
     }
   }
 
-  return { irysPaymentBalanceWei: irysBalance };
+  return { walletBalanceWei: balance };
 }
 
 /**
@@ -293,24 +262,30 @@ export async function preflightEpochPublish(args: {
     args.preflight,
     args.readLatestEpoch,
   );
-  const { irysPaymentBalanceWei } = await runSharedPreflight({
+  const { walletBalanceWei } = await runSharedPreflight({
     privateKeyHex: args.privateKeyHex,
     publisher,
     preflight: args.preflight,
   });
 
   if (args.preflight.uploadBudget !== undefined) {
-    const irysRpcUrl = args.preflight.irysRpcUrl ?? args.preflight.rpcUrl;
-    await assertSufficientUploadBudget({
+    args.preflight.uploadBudget.onStart?.(args.preflight.uploadBudget.epoch.leaves.size);
+    await ensureIrysUploadBudget({
       privateKeyHex: args.privateKeyHex,
-      rpcUrl: irysRpcUrl,
+      rpcUrl: args.preflight.rpcUrl,
       epoch: args.preflight.uploadBudget.epoch,
       epochNumber: args.preflight.uploadBudget.epochNumber,
       parentRootContentId: args.preflight.uploadBudget.parentRootContentId,
-      walletBalanceWei: irysPaymentBalanceWei,
+      walletBalanceWei,
       bufferMultiplier: args.preflight.uploadBudget.bufferMultiplier,
+      fundingGasReserveWei: args.preflight.uploadBudget.fundingGasReserveWei,
       estimateUploadCostWei: args.preflight.uploadBudget.estimateUploadCostWei,
       getIrysLoadedBalance: args.preflight.uploadBudget.getIrysLoadedBalance,
+      fundIrys: args.preflight.uploadBudget.fundIrys,
+      onFund: args.preflight.uploadBudget.onFund,
+      onQuote: args.preflight.uploadBudget.onQuote,
+      recoverFundTxId: args.preflight.uploadBudget.recoverFundTxId,
+      onFundTxSubmitted: args.preflight.uploadBudget.onFundTxSubmitted,
     });
   }
 }

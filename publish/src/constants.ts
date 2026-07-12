@@ -28,13 +28,12 @@ export const REGISTRY_ADDRESS = '0x06667DB3795C70F34b7517D1Af1217D3167BE241' as 
 
 export const BASE_SEPOLIA_CHAIN_ID = 84532;
 
+/** Irys devnet bundler for Base Sepolia testnet uploads. */
+export const IRYS_DEVNET_BUNDLER_URL = 'https://devnet.irys.xyz';
+
+/** Irys fund() gas multiplier for congested testnets (matches Kargain). */
+export const IRYS_FUND_FEE_MULTIPLIER = 1.2;
+
 /** Irys data retrieval and ANS-104 tag-query endpoints. */
 export const IRYS_GATEWAY_URL = 'https://gateway.irys.xyz';
 export const IRYS_GRAPHQL_URL = 'https://uploader.irys.xyz/graphql';
-
-/** @deprecated Use {@link IRYS_GRAPHQL_URL}. Devnet uploads are indexed on uploader.irys.xyz. */
-export const IRYS_DEVNET_GRAPHQL_URL = IRYS_GRAPHQL_URL;
-
-/** Public Ethereum Sepolia JSON-RPC fallback when IRYS_SEPOLIA_RPC_URL is unset. */
-export const DEFAULT_ETH_SEPOLIA_RPC_URL =
-  'https://ethereum-sepolia-rpc.publicnode.com';

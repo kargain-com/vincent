@@ -11,6 +11,7 @@ export default defineConfig({
         'src/resolve-epoch-parent.ts',
         'src/estimate-epoch-upload-cost.ts',
         'src/adapters/sha256-bytes32.ts',
+        'src/adapters/irys-devnet-fund.ts',
       ],
       exclude: ['src/cli/**', 'src/adapters/irys-devnet-uploader.ts'],
       thresholds: {

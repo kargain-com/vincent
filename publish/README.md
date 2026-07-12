@@ -123,14 +123,14 @@ Env vars:
 | Variable | Purpose |
 |----------|---------|
 | `VINCENT_GENESIS_PRIVATE_KEY` | Signs manifest; pays Irys devnet + Base Sepolia gas |
-| `BASE_SEPOLIA_RPC_URL` | Base Sepolia JSON-RPC for the anchor registry |
-| `IRYS_SEPOLIA_RPC_URL` | Ethereum Sepolia JSON-RPC for Irys uploads (default: `https://ethereum-sepolia-rpc.publicnode.com`; do not use `rpc.sepolia.org`) |
+| `BASE_SEPOLIA_RPC_URL` | Base Sepolia JSON-RPC for anchor registry **and** Irys `base-eth` uploads (same as Kargain) |
 | `IRYS_GATEWAY_URL` | Optional data gateway; defaults to `https://gateway.irys.xyz` |
 | `IRYS_GRAPHQL_URL` | Optional tag-query endpoint; defaults to `https://uploader.irys.xyz/graphql` |
+| `VINCENT_IRYS_RECOVER_FUND_TX` | Optional Base Sepolia fund tx hash to register with Irys without sending a new payment |
 
 Irys uses three different endpoints:
 
-- **Ethereum Sepolia RPC** (`IRYS_SEPOLIA_RPC_URL`) — pays for uploads via the Irys SDK
+- **Base Sepolia RPC** (`BASE_SEPOLIA_RPC_URL`) — pays for uploads via Irys `base-eth` on `devnet.irys.xyz`
 - **Gateway** (`IRYS_GATEWAY_URL`) — fetches uploaded bytes by transaction id
 - **GraphQL** (`IRYS_GRAPHQL_URL`) — discovers leaves by owner + tags (`uploader.irys.xyz`, not `arweave.devnet.irys.xyz`)
 
@@ -139,14 +139,25 @@ Registry: `0x06667DB3795C70F34b7517D1Af1217D3167BE241` on Base Sepolia (84532).
 **Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step.
 
 Before uploading, the CLI compiles claims, quotes the full Irys upload cost (every leaf +
-JSONL + manifest via `estimateFolderPrice`), and aborts when Ethereum Sepolia wallet balance
-plus Irys funded balance cannot cover the quoted cost (with a safety buffer). It also verifies
-the private key, registry state (genesis: `epochCount == 0`; incremental: prior epoch readable),
+JSONL + manifest via `estimateFolderPrice`), funds the Irys account from **Base Sepolia**
+when needed (waits for confirmation, registers the fund tx with the Irys bundler with
+retries, then polls the Irys funded balance), and aborts when the wallet cannot cover the
+quoted deficit plus gas reserve. If a prior Base Sepolia fund tx failed to register with
+Irys, set `VINCENT_IRYS_RECOVER_FUND_TX` to that transaction hash. It also verifies the
+private key, registry state (genesis: `epochCount == 0`; incremental: prior epoch readable),
 Base Sepolia RPC and balance, Irys devnet uploader initialization, and the Irys GraphQL
 tag-query schema. A failed preflight performs no uploads.
 
 After uploads and before the on-chain anchor, the CLI polls GraphQL until every leaf is
-indexed and Merkle-valid. If indexing fails, **no chain transaction is sent**.
+indexed and Merkle-valid (per-leaf timeout; longer for `--full`). If indexing fails,
+**no chain transaction is sent**.
+
+### Full seed (`--full`) timing
+
+The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves **sequentially**
+(one Irys transaction per leaf), so a full devnet publish typically runs for **many hours**.
+Progress is logged every 250 leaves. Ensure the publisher wallet holds enough **Base Sepolia
+ETH** for the quoted Irys upload budget plus `publishEpoch` gas.
 
 ### Re-verify an existing epoch (verify-only)
 

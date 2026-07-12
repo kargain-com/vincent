@@ -33,7 +33,7 @@ const epoch = await reader.getLatestEpoch('0xYourPublisher');
 
 ### Publish preflight safety
 
-Genesis publish tooling (`@kargain/vincent-publish`) checks `epochCount == 0` for the publisher wallet **before any upload** via [`assertGenesisPublisherAvailable`](../../publish/src/assert-genesis-publisher.ts). Preflight runs in [`preflightGenesisPublish`](../../publish/src/preflight-genesis-publish.ts) and is invoked by [`publishGenesis`](../../publish/src/publish-genesis.ts) and the founder CLI before leaves, JSONL, or manifest bytes are uploaded. A failed preflight performs no uploads. See [`publish/README.md`](../../publish/README.md) for the full preflight checklist (RPC, balances, Irys probes).
+Genesis publish tooling (`@kargain/vincent-publish`) checks `epochCount == 0` for the publisher wallet **before any upload** via [`assertGenesisPublisherAvailable`](../../publish/src/assert-genesis-publisher.ts). Preflight runs in [`preflightGenesisPublish`](../../publish/src/preflight-genesis-publish.ts) and is invoked by the founder CLI before leaves, JSONL, or manifest bytes are uploaded. Irys devnet uploads use **`base-eth` on Base Sepolia** (same RPC as the anchor registry). A failed preflight performs no uploads. See [`publish/README.md`](../../publish/README.md) for the full checklist.
 
 ### Deterministic deployment parameters
 
