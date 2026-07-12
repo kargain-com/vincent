@@ -231,6 +231,10 @@ async function runPublish(options: CliOptions): Promise<void> {
     throw new Error(built.error.message);
   }
 
+  process.stdout.write(
+    `Upload budget preflight (${String(built.value.leaves.size)} leaves)...\n`,
+  );
+
   const uploader = await createIrysDevnetUploader({
     privateKeyHex: privateKey,
     rpcUrl: irysRpcUrl,
@@ -243,7 +247,16 @@ async function runPublish(options: CliOptions): Promise<void> {
     uploader,
     chainPublisher,
     requireGenesis: options.genesis ? true : undefined,
-    preflight: preflightOptions,
+    preflight: {
+      ...preflightOptions,
+      requireGenesis: options.genesis ? true : undefined,
+      targetEpochNumber: resolved.epochNumber,
+      uploadBudget: {
+        epoch: built.value,
+        epochNumber: resolved.epochNumber,
+        parentRootContentId: resolved.parentRootContentId,
+      },
+    },
     leafIndexCheck: {
       gatewayUrl: irysGatewayUrl,
       graphqlUrl: irysGraphqlUrl,

@@ -4,7 +4,12 @@ import { baseSepolia, sepolia } from 'viem/chains';
 
 import { createIrysDevnetUploader } from './adapters/irys-devnet-uploader.js';
 import { assertGenesisPublisherAvailable, type EpochCountReader } from './assert-genesis-publisher.js';
+import {
+  assertSufficientUploadBudget,
+  type AssertSufficientUploadBudgetOptions,
+} from './estimate-epoch-upload-cost.js';
 import type { EpochChainReader } from './resolve-epoch-parent.js';
+import type { EpochBuild } from '@kargain/vincent-compiler';
 
 /** Minimum Base Sepolia balance required before any permanent Arweave/Irys uploads. */
 export const DEFAULT_MIN_CHAIN_BALANCE_WEI = parseEther('0.0001');
@@ -26,11 +31,22 @@ export interface GenesisPreflightOptions {
   probeIrysGraphql?: () => Promise<void>;
 }
 
+export interface EpochUploadBudgetPreflight {
+  epoch: EpochBuild;
+  epochNumber: number;
+  parentRootContentId: string | null;
+  bufferMultiplier?: number;
+  estimateUploadCostWei?: AssertSufficientUploadBudgetOptions['estimateUploadCostWei'];
+  getIrysLoadedBalance?: AssertSufficientUploadBudgetOptions['getIrysLoadedBalance'];
+}
+
 export interface EpochPreflightOptions extends GenesisPreflightOptions {
   /** When true, abort if publisher already has on-chain epochs. */
   requireGenesis?: boolean;
   /** Epoch tag for Irys GraphQL probe (defaults to 1). */
   targetEpochNumber?: number;
+  /** When set, quote Irys upload cost and abort before any permanent uploads. */
+  uploadBudget?: EpochUploadBudgetPreflight;
 }
 
 function formatError(error: unknown): string {
@@ -169,7 +185,7 @@ async function runSharedPreflight(args: {
   privateKeyHex: `0x${string}`;
   publisher: string;
   preflight: EpochPreflightOptions;
-}): Promise<void> {
+}): Promise<{ irysPaymentBalanceWei: bigint }> {
   const publisher = toChecksumAddress(args.publisher);
   const derivedPublisher = toChecksumAddress(addressFromPrivateKey(args.privateKeyHex));
   if (derivedPublisher !== publisher) {
@@ -253,6 +269,8 @@ async function runSharedPreflight(args: {
       );
     }
   }
+
+  return { irysPaymentBalanceWei: irysBalance };
 }
 
 /**
@@ -275,9 +293,24 @@ export async function preflightEpochPublish(args: {
     args.preflight,
     args.readLatestEpoch,
   );
-  await runSharedPreflight({
+  const { irysPaymentBalanceWei } = await runSharedPreflight({
     privateKeyHex: args.privateKeyHex,
     publisher,
     preflight: args.preflight,
   });
+
+  if (args.preflight.uploadBudget !== undefined) {
+    const irysRpcUrl = args.preflight.irysRpcUrl ?? args.preflight.rpcUrl;
+    await assertSufficientUploadBudget({
+      privateKeyHex: args.privateKeyHex,
+      rpcUrl: irysRpcUrl,
+      epoch: args.preflight.uploadBudget.epoch,
+      epochNumber: args.preflight.uploadBudget.epochNumber,
+      parentRootContentId: args.preflight.uploadBudget.parentRootContentId,
+      walletBalanceWei: irysPaymentBalanceWei,
+      bufferMultiplier: args.preflight.uploadBudget.bufferMultiplier,
+      estimateUploadCostWei: args.preflight.uploadBudget.estimateUploadCostWei,
+      getIrysLoadedBalance: args.preflight.uploadBudget.getIrysLoadedBalance,
+    });
+  }
 }

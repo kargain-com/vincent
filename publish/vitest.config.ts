@@ -9,6 +9,7 @@ export default defineConfig({
       include: [
         'src/publish-epoch.ts',
         'src/resolve-epoch-parent.ts',
+        'src/estimate-epoch-upload-cost.ts',
         'src/adapters/sha256-bytes32.ts',
       ],
       exclude: ['src/cli/**', 'src/adapters/irys-devnet-uploader.ts'],

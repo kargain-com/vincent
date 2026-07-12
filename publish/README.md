@@ -138,7 +138,12 @@ Registry: `0x06667DB3795C70F34b7517D1Af1217D3167BE241` on Base Sepolia (84532).
 
 **Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step.
 
-Before uploading, the CLI verifies the private key, registry state (genesis: `epochCount == 0`; incremental: prior epoch readable), Base Sepolia RPC and balance, Ethereum Sepolia RPC and Irys payment balance, Irys devnet uploader initialization, and the Irys GraphQL tag-query schema. A failed preflight performs no uploads.
+Before uploading, the CLI compiles claims, quotes the full Irys upload cost (every leaf +
+JSONL + manifest via `estimateFolderPrice`), and aborts when Ethereum Sepolia wallet balance
+plus Irys funded balance cannot cover the quoted cost (with a safety buffer). It also verifies
+the private key, registry state (genesis: `epochCount == 0`; incremental: prior epoch readable),
+Base Sepolia RPC and balance, Irys devnet uploader initialization, and the Irys GraphQL
+tag-query schema. A failed preflight performs no uploads.
 
 After uploads and before the on-chain anchor, the CLI polls GraphQL until every leaf is
 indexed and Merkle-valid. If indexing fails, **no chain transaction is sent**.

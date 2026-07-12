@@ -1,7 +1,6 @@
-import { Uploader } from '@irys/upload';
-import { Ethereum } from '@irys/upload-ethereum';
 import { Buffer } from 'node:buffer';
 
+import { createIrysDevnetClient } from './irys-devnet-client.js';
 import type { UploadResult, UploadTag, Uploader as VincentUploader } from './types.js';
 
 export interface IrysDevnetUploaderOptions {
@@ -13,10 +12,7 @@ export interface IrysDevnetUploaderOptions {
 export async function createIrysDevnetUploader(
   options: IrysDevnetUploaderOptions,
 ): Promise<VincentUploader> {
-  const irysUploader = await Uploader(Ethereum)
-    .withWallet(options.privateKeyHex)
-    .withRpc(options.rpcUrl)
-    .devnet();
+  const irysUploader = await createIrysDevnetClient(options);
 
   return {
     async upload(data: Uint8Array, tags: UploadTag[]): Promise<UploadResult> {
