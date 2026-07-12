@@ -32,7 +32,7 @@ export async function resolveEpochParent(
 
   return {
     epochNumber: Number(epochCount) + 1,
-    parentRootBytes32: latest.merkleRoot as `0x${string}`,
+    parentRootBytes32: latest.merkleRoot,
     parentRootContentId,
   };
 }

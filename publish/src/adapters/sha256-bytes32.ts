@@ -14,4 +14,4 @@ export function bytes32ToContentId(value: `0x${string}`): string {
 }
 
 /** Zero bytes32 for genesis parentRoot on-chain. */
-export const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as `0x${string}`;
+export const ZERO_BYTES32: `0x${string}` = `0x${'0'.repeat(64)}`;
