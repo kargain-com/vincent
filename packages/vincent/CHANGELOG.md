@@ -1,5 +1,12 @@
 # @kargain/vincent
 
+## 0.7.0
+
+### Minor Changes
+
+- 771f0e7: Add `@kargain/vincent/anchor` with `createAnchorReader` for reading VincentAnchorRegistry epochs (viem optional peer). Includes protocol-ready bytes32→sha256 conversion and README end-to-end decode example.
+- 2273967: Add the public zero-dependency `@kargain/vincent/arweave` subpath with `createArweaveGetLeaf` for ANS-104 tag-query leaf discovery. This pairs with `@kargain/vincent/decoder` to give consumers the full client decode stack; `getLeaf` remains injectable, so Arweave is only the reference backend and mirrors, caches, or alternate sources can be supplied instead.
+
 ## 0.6.0
 
 ### Minor Changes

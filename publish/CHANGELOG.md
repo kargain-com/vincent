@@ -1,4 +1,4 @@
-# @kargain/vincent-pipeline
+# @kargain/vincent-publish
 
 ## 0.0.2
 
@@ -8,11 +8,3 @@
 - Updated dependencies [2273967]
   - @kargain/vincent@0.7.0
   - @kargain/vincent-compiler@0.0.2
-
-## 0.0.1
-
-### Patch Changes
-
-- Updated dependencies
-  - @kargain/vincent@0.6.0
-  - @kargain/vincent-compiler@0.0.1

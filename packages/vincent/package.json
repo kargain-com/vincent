@@ -1,6 +1,6 @@
 {
   "name": "@kargain/vincent",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Offline-first deterministic VIN validation, decoding, and WMI lookup per ISO 3779.",
   "keywords": [
     "vin",

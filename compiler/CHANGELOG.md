@@ -1,5 +1,13 @@
 # @kargain/vincent-compiler
 
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [771f0e7]
+- Updated dependencies [2273967]
+  - @kargain/vincent@0.7.0
+
 ## 0.0.1
 
 ### Patch Changes
