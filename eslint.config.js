@@ -2,7 +2,21 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['eslint.config.js', '**/dist/**', '**/coverage/**', '**/node_modules/**', 'compiler/scripts/**', 'packages/vincent/scripts/**', 'packages/vincent/src/wmi-core.generated.ts', 'packages/vincent/src/wmi-extended.generated.ts'] },
+  {
+    ignores: [
+      'eslint.config.js',
+      '**/dist/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      'contracts/artifacts/**',
+      'contracts/cache/**',
+      'compiler/scripts/**',
+      'packages/vincent/scripts/**',
+      'publish/scripts/**',
+      'packages/vincent/src/wmi-core.generated.ts',
+      'packages/vincent/src/wmi-extended.generated.ts',
+    ],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -12,13 +26,21 @@ export default tseslint.config(
           'packages/vincent/tsconfig.eslint.json',
           'pipeline/tsconfig.eslint.json',
           'compiler/tsconfig.eslint.json',
+          'publish/tsconfig.eslint.json',
+          'contracts/tsconfig.eslint.json',
         ],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['packages/**/src/**/*.ts', 'compiler/src/**/*.ts'],
+    files: [
+      'packages/**/src/**/*.ts',
+      'compiler/src/**/*.ts',
+      'pipeline/src/**/*.ts',
+      'publish/src/**/*.ts',
+    ],
+    ignores: ['publish/src/cli/**'],
     rules: {
       'no-console': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
@@ -49,6 +71,23 @@ export default tseslint.config(
     files: ['packages/vincent/src/protocol/crypto.ts'],
     rules: {
       'no-restricted-imports': 'off',
+    },
+  },
+  {
+    files: [
+      'publish/src/cli/**/*.ts',
+      'publish/test/**/*.ts',
+      'contracts/scripts/**/*.ts',
+      'contracts/test/**/*.ts',
+      'packages/**/test/**/*.ts',
+      'compiler/test/**/*.ts',
+      'pipeline/test/**/*.ts',
+    ],
+    rules: {
+      'no-console': 'off',
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 );

@@ -13,7 +13,8 @@
     "typecheck": "pnpm --filter @kargain/vincent typecheck && pnpm --filter @kargain/vincent-compiler typecheck && pnpm --filter @kargain/vincent-pipeline typecheck",
     "generate:wmi": "pnpm --filter @kargain/vincent-pipeline generate:wmi",
     "generate:seed": "pnpm --filter @kargain/vincent-pipeline generate:seed",
-    "validate:seed": "pnpm --filter @kargain/vincent-pipeline validate:seed"
+    "validate:seed": "pnpm --filter @kargain/vincent-pipeline validate:seed",
+    "validate:full-sim": "pnpm --filter @kargain/vincent-publish validate:full-sim"
   },
   "devDependencies": {
     "@changesets/cli": "catalog:",

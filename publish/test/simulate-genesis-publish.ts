@@ -1,19 +1,26 @@
 import { compile } from '@kargain/vincent-compiler';
+import { addressFromPrivateKey, toChecksumAddress } from '@kargain/vincent/protocol';
 import { parseEther } from 'viem';
 
-import type { PublishGenesisReport } from '../src/adapters/types.js';
+import type {
+  ChainPublisher,
+  PublishEpochArgs,
+  PublishGenesisReport,
+} from '../src/adapters/types.js';
+import type { EpochCountReader } from '../src/assert-genesis-publisher.js';
 import {
   preflightGenesisPublish,
   type GenesisPreflightOptions,
 } from '../src/preflight-genesis-publish.js';
 import { publishGenesis } from '../src/publish-genesis.js';
-import { TEST_PRIVATE_KEY, TEST_PUBLISHER } from '../src/constants.js';
+import { TEST_PRIVATE_KEY } from '../src/constants.js';
 import {
   verifyGenesisPublish,
+  type GenesisPublishChainVerifier,
   type VerifyGenesisPublishResult,
 } from '../src/verify-genesis-publish.js';
 import { loadGenesisMiniClaims } from './helpers.js';
-import { createMockChainPublisher, type MockChainPublisher } from './mock-chain-publisher.js';
+import { createMockChainPublisher } from './mock-chain-publisher.js';
 import { createMockIrysGateway } from './mock-irys-gateway.js';
 import { createLiveMockIrysFetchImpl } from './live-mock-irys-fetch.js';
 import { createMockUploader } from './mock-uploader.js';
@@ -21,8 +28,15 @@ import { createMockUploader } from './mock-uploader.js';
 export interface SimulateGenesisMiniOptions {
   preflight?: GenesisPreflightOptions;
   skipPreflight?: boolean;
-  chainPublisher?: MockChainPublisher;
+  signerKeyHex?: string;
+  chainPublisher?: SimulationChainPublisher;
 }
+
+export type SimulationChainPublisher = ChainPublisher &
+  EpochCountReader &
+  GenesisPublishChainVerifier & {
+    readonly calls?: readonly PublishEpochArgs[];
+  };
 
 export interface SimulateGenesisMiniResult {
   report: PublishGenesisReport;
@@ -71,23 +85,25 @@ export async function simulateGenesisMiniPublish(
     throw new Error(built.error.message);
   }
 
+  const signerKeyHex = options?.signerKeyHex ?? TEST_PRIVATE_KEY;
+  const publisher = toChecksumAddress(addressFromPrivateKey(signerKeyHex));
   const chainPublisher = options?.chainPublisher ?? createMockChainPublisher();
   const preflight = options?.preflight ?? mockPreflightOptions();
 
   if (options?.skipPreflight !== true) {
     await preflightGenesisPublish({
-      privateKeyHex: TEST_PRIVATE_KEY,
-      publisher: TEST_PUBLISHER,
+      privateKeyHex: signerKeyHex as `0x${string}`,
+      publisher,
       epochCountReader: chainPublisher,
       preflight,
     });
   }
 
   const uploader = createMockUploader();
-  const liveGateway = createLiveMockIrysFetchImpl(uploader, TEST_PUBLISHER, 1);
+  const liveGateway = createLiveMockIrysFetchImpl(uploader, publisher, 1);
   const report = await publishGenesis({
     epoch: built.value,
-    signerKeyHex: TEST_PRIVATE_KEY,
+    signerKeyHex,
     uploader,
     chainPublisher,
     preflight,
@@ -102,7 +118,7 @@ export async function simulateGenesisMiniPublish(
 
   const { gatewayUrl, graphqlUrl, fetchImpl } = createMockIrysGateway(
     uploader.records,
-    TEST_PUBLISHER,
+    publisher,
     1,
   );
 
@@ -120,7 +136,9 @@ export async function simulateGenesisMiniPublish(
     verification,
     uploadCount: uploader.records.length,
     leafUploadCount: countLeafUploads(uploader.records),
-    chainCallCount: chainPublisher.calls.length,
+    chainCallCount:
+      chainPublisher.calls?.length ??
+      Number(await chainPublisher.readEpochCount(publisher as `0x${string}`)),
     gatewayUrl,
     graphqlUrl,
   };

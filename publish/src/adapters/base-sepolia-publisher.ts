@@ -2,9 +2,14 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  type Account,
   type Abi,
   type Address,
+  type Chain,
   type Hex,
+  type PublicClient,
+  type Transport,
+  type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
@@ -58,8 +63,11 @@ const REGISTRY_ABI = [
 
 export interface BaseSepoliaPublisherOptions {
   privateKeyHex: Hex;
-  rpcUrl: string;
+  rpcUrl?: string;
   registryAddress?: Address;
+  chain?: Chain;
+  publicClient?: PublicClient;
+  walletClient?: WalletClient<Transport, Chain, Account>;
 }
 
 export interface OnChainEpoch {
@@ -91,20 +99,32 @@ function sleep(ms: number): Promise<void> {
 }
 
 export interface BaseSepoliaReaderOptions {
-  rpcUrl: string;
+  rpcUrl?: string;
   registryAddress?: Address;
+  chain?: Chain;
+  publicClient?: PublicClient;
 }
 
-/** Read-only Base Sepolia registry access (verify-only CLI, no signing). */
+function requireRpcUrl(rpcUrl: string | undefined): string {
+  if (rpcUrl === undefined) {
+    throw new Error('rpcUrl is required when no client is provided');
+  }
+  return rpcUrl;
+}
+
+/** Read-only registry access (verify-only CLI, no signing). */
 export function createBaseSepoliaReader(
   options: BaseSepoliaReaderOptions,
 ): Pick<BaseSepoliaPublisher, 'readEpochCount' | 'readLatestEpoch' | 'waitForLatestEpoch'> {
-  const registryAddress = (options.registryAddress ?? REGISTRY_ADDRESS) as Address;
+  const registryAddress = (options.registryAddress ?? REGISTRY_ADDRESS);
+  const chain = options.chain ?? baseSepolia;
 
-  const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(options.rpcUrl),
-  });
+  const publicClient =
+    options.publicClient ??
+    createPublicClient({
+      chain,
+      transport: http(requireRpcUrl(options.rpcUrl)),
+    });
 
   return {
     async readEpochCount(publisher: Address): Promise<bigint> {
@@ -153,23 +173,28 @@ export function createBaseSepoliaReader(
   };
 }
 
-/** Base Sepolia VincentAnchorRegistry publisher (founder-run CLI only). */
+/** VincentAnchorRegistry publisher (Base Sepolia by default). */
 export function createBaseSepoliaPublisher(
   options: BaseSepoliaPublisherOptions,
 ): BaseSepoliaPublisher {
-  const registryAddress = (options.registryAddress ?? REGISTRY_ADDRESS) as Address;
+  const registryAddress = (options.registryAddress ?? REGISTRY_ADDRESS);
   const account = privateKeyToAccount(options.privateKeyHex);
+  const chain = options.chain ?? baseSepolia;
 
-  const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(options.rpcUrl),
-  });
+  const publicClient =
+    options.publicClient ??
+    createPublicClient({
+      chain,
+      transport: http(requireRpcUrl(options.rpcUrl)),
+    });
 
-  const walletClient = createWalletClient({
-    account,
-    chain: baseSepolia,
-    transport: http(options.rpcUrl),
-  });
+  const walletClient =
+    options.walletClient ??
+    createWalletClient({
+      account,
+      chain,
+      transport: http(requireRpcUrl(options.rpcUrl)),
+    });
 
   return {
     async publishEpoch(args: PublishEpochArgs): Promise<Hex> {
@@ -184,7 +209,7 @@ export function createBaseSepoliaPublisher(
           args.parentRoot,
           args.manifestUri,
         ],
-        chain: baseSepolia,
+        chain,
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });

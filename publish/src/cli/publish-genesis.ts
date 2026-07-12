@@ -1,5 +1,4 @@
-import { createReadStream, readFileSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,7 +7,6 @@ import { config as loadEnv } from 'dotenv';
 import { compile } from '@kargain/vincent-compiler';
 import {
   addressFromPrivateKey,
-  parseClaim,
   parseManifest,
   toChecksumAddress,
   type Claim,
@@ -17,6 +15,7 @@ import {
 import { createBaseSepoliaPublisher, createBaseSepoliaReader } from '../adapters/base-sepolia-publisher.js';
 import { createIrysDevnetUploader } from '../adapters/irys-devnet-uploader.js';
 import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL, DEFAULT_ETH_SEPOLIA_RPC_URL } from '../constants.js';
+import { loadFullSeedClaims } from '../load-full-seed-claims.js';
 import { preflightGenesisPublish } from '../preflight-genesis-publish.js';
 import { publishGenesis } from '../publish-genesis.js';
 import { manifestHash } from '../sign-manifest.js';
@@ -110,30 +109,6 @@ function loadGenesisMiniClaims(): Claim[] {
   return JSON.parse(readFileSync(path, 'utf8')) as Claim[];
 }
 
-async function loadFullSeedClaims(): Promise<Claim[]> {
-  const path = join(REPO_ROOT, 'pipeline/.build/genesis-seed.jsonl');
-  const claims: Claim[] = [];
-  const rl = createInterface({
-    input: createReadStream(path, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
-
-  let lineNo = 0;
-  for await (const line of rl) {
-    if (line.length === 0) {
-      continue;
-    }
-    lineNo += 1;
-    const parsed = parseClaim(JSON.parse(line) as unknown);
-    if (!parsed.ok) {
-      throw new Error(`Invalid claim at line ${String(lineNo)}: ${parsed.error.message}`);
-    }
-    claims.push(parsed.value);
-  }
-
-  return claims;
-}
-
 function arUriToGatewayUrl(gatewayUrl: string, uri: string): string {
   if (!uri.startsWith('ar://')) {
     throw new Error(`Expected ar:// URI, got ${uri}`);
@@ -204,10 +179,6 @@ async function runVerifyOnly(options: CliOptions): Promise<void> {
   for (const failure of verification.failures) {
     process.stdout.write(`FAIL ${failure}\n`);
     ok = false;
-  }
-
-  if (options.fixture === 'full') {
-    process.stdout.write('Skipping fixture VIN decode for --full (manifest/chain verified)\n');
   }
 
   process.stdout.write(ok ? 'PASS live verification\n' : 'FAIL live verification\n');
@@ -293,10 +264,6 @@ async function runPublish(options: CliOptions): Promise<void> {
   for (const failure of verification.failures) {
     process.stdout.write(`FAIL ${failure}\n`);
     ok = false;
-  }
-
-  if (options.fixture === 'full') {
-    process.stdout.write('Skipping fixture VIN decode for --full (manifest/chain verified)\n');
   }
 
   process.stdout.write(ok ? 'PASS live verification\n' : 'FAIL live verification\n');

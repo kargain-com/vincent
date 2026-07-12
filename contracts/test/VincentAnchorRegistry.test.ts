@@ -33,7 +33,7 @@ describe("VincentAnchorRegistry", async () => {
         MERKLE_ROOT_1,
         JSONL_SHA_1,
         MANIFEST_HASH_1,
-        `0x${"0".repeat(64)}` as `0x${string}`,
+        `0x${"0".repeat(64)}`,
         MANIFEST_URI_1,
       ]);
 
@@ -68,7 +68,7 @@ describe("VincentAnchorRegistry", async () => {
         MERKLE_ROOT_1,
         JSONL_SHA_1,
         MANIFEST_HASH_1,
-        `0x${"0".repeat(64)}` as `0x${string}`,
+        `0x${"0".repeat(64)}`,
         MANIFEST_URI_1,
       ]);
       await registry.write.publishEpoch([
@@ -91,7 +91,7 @@ describe("VincentAnchorRegistry", async () => {
         MERKLE_ROOT_1,
         JSONL_SHA_1,
         MANIFEST_HASH_1,
-        `0x${"0".repeat(64)}` as `0x${string}`,
+        `0x${"0".repeat(64)}`,
         MANIFEST_URI_1,
       ]);
       await viem.assertions.revertWith(
@@ -110,10 +110,10 @@ describe("VincentAnchorRegistry", async () => {
       const registry = await deployRegistry();
       await viem.assertions.revertWith(
         registry.write.publishEpoch([
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           JSONL_SHA_1,
           MANIFEST_HASH_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           MANIFEST_URI_1,
         ]),
         "merkleRoot must be non-zero",
@@ -125,9 +125,9 @@ describe("VincentAnchorRegistry", async () => {
       await viem.assertions.revertWith(
         registry.write.publishEpoch([
           MERKLE_ROOT_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           MANIFEST_HASH_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           MANIFEST_URI_1,
         ]),
         "jsonlSha256 must be non-zero",
@@ -140,8 +140,8 @@ describe("VincentAnchorRegistry", async () => {
         registry.write.publishEpoch([
           MERKLE_ROOT_1,
           JSONL_SHA_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
+          `0x${"0".repeat(64)}`,
           MANIFEST_URI_1,
         ]),
         "manifestHash must be non-zero",
@@ -155,7 +155,7 @@ describe("VincentAnchorRegistry", async () => {
           MERKLE_ROOT_1,
           JSONL_SHA_1,
           MANIFEST_HASH_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           "",
         ]),
         "invalid manifestUri length",
@@ -170,7 +170,7 @@ describe("VincentAnchorRegistry", async () => {
           MERKLE_ROOT_1,
           JSONL_SHA_1,
           MANIFEST_HASH_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           longUri,
         ]),
         "invalid manifestUri length",
@@ -185,7 +185,7 @@ describe("VincentAnchorRegistry", async () => {
         MERKLE_ROOT_1,
         JSONL_SHA_1,
         MANIFEST_HASH_1,
-        `0x${"0".repeat(64)}` as `0x${string}`,
+        `0x${"0".repeat(64)}`,
         maxUri,
       ]);
       const epoch = await registry.read.getEpoch([publisher, 0n]);
@@ -203,7 +203,7 @@ describe("VincentAnchorRegistry", async () => {
           MERKLE_ROOT_1,
           JSONL_SHA_1,
           MANIFEST_HASH_1,
-          `0x${"0".repeat(64)}` as `0x${string}`,
+          `0x${"0".repeat(64)}`,
           MANIFEST_URI_1,
         ],
         { account: publisherA.account },
@@ -213,7 +213,7 @@ describe("VincentAnchorRegistry", async () => {
       const jsonlB = keccak256(toHex("jsonl-b"));
       const manifestB = keccak256(toHex("manifest-b"));
       await registry.write.publishEpoch(
-        [rootB, jsonlB, manifestB, `0x${"0".repeat(64)}` as `0x${string}`, "ar://b-genesis"],
+        [rootB, jsonlB, manifestB, `0x${"0".repeat(64)}`, "ar://b-genesis"],
         { account: publisherB.account },
       );
 
@@ -238,7 +238,7 @@ describe("VincentAnchorRegistry", async () => {
             MERKLE_ROOT_1,
             JSONL_SHA_1,
             MANIFEST_HASH_1,
-            `0x${"0".repeat(64)}` as `0x${string}`,
+            `0x${"0".repeat(64)}`,
             MANIFEST_URI_1,
           ],
           { account: publisher.account },
@@ -266,7 +266,7 @@ describe("VincentAnchorRegistry", async () => {
         MERKLE_ROOT_1,
         JSONL_SHA_1,
         MANIFEST_HASH_1,
-        `0x${"0".repeat(64)}` as `0x${string}`,
+        `0x${"0".repeat(64)}`,
         MANIFEST_URI_1,
       ]);
       await registry.write.publishEpoch([
@@ -332,7 +332,7 @@ describe("VincentAnchorRegistry", async () => {
         MERKLE_ROOT_1,
         JSONL_SHA_1,
         MANIFEST_HASH_1,
-        `0x${"0".repeat(64)}` as `0x${string}`,
+        `0x${"0".repeat(64)}`,
         MANIFEST_URI_1,
       ]);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });

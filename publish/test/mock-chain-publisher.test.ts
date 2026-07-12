@@ -42,7 +42,7 @@ describe('mock chain publisher registry rules', () => {
 
   it('accepts second epoch with correct parentRoot', async () => {
     const chainPublisher = createMockChainPublisher();
-    const merkleRoot1 = `0x${'1'.repeat(64)}` as `0x${string}`;
+    const merkleRoot1 = `0x${'1'.repeat(64)}`;
 
     await chainPublisher.publishEpoch({
       merkleRoot: merkleRoot1,

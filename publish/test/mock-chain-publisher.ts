@@ -39,7 +39,7 @@ function assertManifestUri(manifestUri: string): void {
 export function createMockChainPublisher(options?: {
   publisher?: `0x${string}`;
 }): MockChainPublisher {
-  const publisher = options?.publisher ?? (TEST_PUBLISHER as `0x${string}`);
+  const publisher = options?.publisher ?? (TEST_PUBLISHER);
   const calls: PublishEpochArgs[] = [];
   const epochs: StoredEpoch[] = [];
   let counter = 0;
@@ -100,7 +100,7 @@ export function createMockChainPublisher(options?: {
         manifestUri: args.manifestUri,
       });
       counter += 1;
-      return `0x${String(counter).padStart(64, '0')}` as `0x${string}`;
+      return `0x${String(counter).padStart(64, '0')}`;
     },
   };
 }

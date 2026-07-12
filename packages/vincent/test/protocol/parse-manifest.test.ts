@@ -11,7 +11,8 @@ describe('parseManifest', () => {
   });
 
   it('accepts manifest without claims', () => {
-    const { claims: _claims, ...withoutClaims } = validManifest;
+    const withoutClaims = { ...validManifest };
+    delete (withoutClaims as Partial<typeof validManifest>).claims;
     expect(parseManifest(withoutClaims).ok).toBe(true);
   });
 
@@ -61,7 +62,11 @@ describe('parseManifest', () => {
   });
 
   it('rejects unsorted claims', () => {
-    const claims = [...validManifest.claims!].reverse();
+    const fixtureClaims = validManifest.claims;
+    if (fixtureClaims === undefined) {
+      throw new Error('golden manifest must include claims');
+    }
+    const claims = [...fixtureClaims].reverse();
     expect(parseManifest({ ...validManifest, claims }).ok).toBe(false);
   });
 

@@ -12,6 +12,7 @@ import {
   VIN_FUEL,
   VIN_PLANT,
 } from './cli/genesis-mini-vins.js';
+import { loadSeedFixtureCases } from './seed-fixtures.js';
 import { manifestHash, verifySignedManifest } from './sign-manifest.js';
 
 export interface GenesisPublishChainVerifier {
@@ -103,6 +104,57 @@ async function verifyFixtureVins(
   return failures;
 }
 
+async function verifySeedFixtureVins(
+  gatewayUrl: string,
+  graphqlUrl: string,
+  publisher: string,
+  merkleRoot: string,
+  fetchImpl: typeof fetch,
+): Promise<string[]> {
+  const getLeaf = createArweaveGetLeaf({
+    gatewayUrl,
+    graphqlUrl,
+    publisher,
+    epoch: 1,
+    fetchImpl,
+  });
+  const decoder = createDecoder({ merkleRoot, getLeaf });
+
+  const results = await Promise.all(
+    loadSeedFixtureCases().map(async (testCase) => {
+      const decoded = await decoder.decode(
+        testCase.vin,
+        testCase.year === undefined ? {} : { year: testCase.year },
+      );
+      const actual = {
+        manufacturer: decoded.wmi?.manufacturer ?? null,
+        model: decoded.attributes.find((attr) => attr.attribute === 'model')?.value,
+        bodyType: decoded.attributes.find((attr) => attr.attribute === 'bodyType')?.value,
+        fuelType: decoded.attributes.find((attr) => attr.attribute === 'fuelType')?.value,
+      };
+      const failures: string[] = [];
+
+      if (actual.manufacturer !== testCase.expected.manufacturer) {
+        failures.push(
+          `decode manufacturer for ${testCase.vin}: expected ${testCase.expected.manufacturer}, got ${String(actual.manufacturer)}`,
+        );
+      }
+      for (const field of ['model', 'bodyType', 'fuelType'] as const) {
+        const expected = testCase.expected[field];
+        if (expected !== undefined && actual[field] !== expected) {
+          failures.push(
+            `decode ${field} for ${testCase.vin}: expected ${expected}, got ${String(actual[field])}`,
+          );
+        }
+      }
+
+      return failures;
+    }),
+  );
+
+  return results.flat();
+}
+
 /** Post-publish verification shared by the founder CLI and offline simulations. */
 export async function verifyGenesisPublish(
   options: VerifyGenesisPublishOptions,
@@ -145,6 +197,16 @@ export async function verifyGenesisPublish(
   if (options.fixture === 'genesis-mini') {
     failures.push(
       ...(await verifyFixtureVins(
+        options.gatewayUrl,
+        options.graphqlUrl,
+        report.publisher.toLowerCase(),
+        report.manifest.dataset.merkleRoot,
+        fetchImpl,
+      )),
+    );
+  } else {
+    failures.push(
+      ...(await verifySeedFixtureVins(
         options.gatewayUrl,
         options.graphqlUrl,
         report.publisher.toLowerCase(),

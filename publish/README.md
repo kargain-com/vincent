@@ -57,8 +57,9 @@ Sequence: upload leaves → gzip JSONL → build+sign manifest → upload manife
 `publishEpoch` on-chain (genesis: `parent: null`, `parentRoot: 0x00…00`).
 
 Adapter interfaces live in [`src/adapters/types.ts`](src/adapters/types.ts). Real adapters
-(Irys devnet, Base Sepolia viem) are in [`src/adapters/`](src/adapters/) and used only
-by the founder CLI.
+(Irys devnet, Base Sepolia viem) are in [`src/adapters/`](src/adapters/). The Base
+Sepolia adapter is also exercised against a real VincentAnchorRegistry deployment on
+an in-process local Hardhat EVM.
 
 ### Founder-run CLI (not in `pnpm test`)
 
@@ -69,7 +70,7 @@ cp publish/.env.example publish/.env   # fill in locally
 
 pnpm --filter @kargain/vincent-publish build
 pnpm --filter @kargain/vincent-publish publish:genesis -- --devnet --fixture genesis-mini
-# or: --full  (reads pipeline/.build/genesis-seed.jsonl; chain+manifest verify only)
+# or: --full  (reads the full seed and verifies all 20 committed VIN fixtures)
 ```
 
 Env vars:
@@ -127,3 +128,15 @@ pnpm --filter @kargain/vincent-publish test
 Includes offline mock `publishGenesis` e2e (upload → chain → tag getLeaf decode → verifyEpoch).
 `test/genesis-publish-simulation.test.ts` simulates the full founder CLI path — preflight,
 upload, on-chain anchor, manifest verification, and fixture VIN decode — without gas or live RPC.
+The default fast gate also deploys the real `VincentAnchorRegistry` bytecode to Hardhat EDR,
+pins the mock publisher to the contract across success and revert scenarios, and runs the
+genesis-mini pipeline against the real local contract using funded ephemeral accounts.
+
+The heavier full-seed simulation is opt-in and never contacts a live network:
+
+```bash
+pnpm validate:full-sim
+```
+
+It compiles `pipeline/.build/genesis-seed.jsonl`, uploads every leaf to the local Irys
+mock, anchors the epoch in the real local contract, and decodes all 20 committed seed VINs.

@@ -13,7 +13,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
+    "pretest": "pnpm --filter @kargain/vincent-contracts build",
+    "test": "vitest run --no-file-parallelism",
+    "prevalidate:full-sim": "pnpm --filter @kargain/vincent-contracts build",
+    "validate:full-sim": "node --max-old-space-size=8192 ./node_modules/vitest/vitest.mjs run --config vitest.full-sim.config.ts --no-file-parallelism",
     "publish:genesis": "node dist/cli/publish-genesis.js"
   },
   "dependencies": {
@@ -25,8 +28,10 @@
     "viem": "^2.31.0"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "4.1.10",
+    "hardhat": "^3.9.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
