@@ -3,3 +3,14 @@ dist/
 coverage/
 pipeline/.cache/
 pipeline/.build/
+contracts/cache/
+contracts/artifacts/
+contracts/coverage/
+
+# Environment (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Local maintainer notes (never committed / never published)
+*.local.md

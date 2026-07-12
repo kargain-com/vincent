@@ -5,6 +5,7 @@
 | [PROTOCOL.md](PROTOCOL.md) | Published (v1.2) | Normative protocol specification |
 | [SEED.md](SEED.md) | Published | Genesis seed corpus overview |
 | [GOVERNANCE.md](GOVERNANCE.md) | Published | Governance model and decentralization roadmap |
+| [contracts/](contracts/) | Published | On-chain VincentAnchorRegistry address table |
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose changes to these documents.
 

@@ -258,8 +258,12 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 
 ## 9. Anchoring and canon selection
 
-- Registry contract (per chain): minimal, ownerless, append-only — `anchor(bytes32 manifestHash, string uri)` emitting an event. Anchoring the same manifest on multiple chains is encouraged.
-- **Canon selection is a client policy, not a protocol rule.** Reference policy: among anchored manifests with valid signatures and reproducible lineage, prefer the one with the most `rebuilt = true` attestations from the client's trusted reviewer set (N-of-M); on ties, prefer the greater epoch, then the earliest anchor.
+- **Anchor contract:** `VincentAnchorRegistry` — immutable, ownerless, permissionless, append-only per-publisher epoch registry. Each publisher maintains an independent epoch chain. Entry point: `publishEpoch(merkleRoot, jsonlSha256, manifestHash, parentRoot, manifestUri)`. The publisher's transaction is the attestation; there is no owner, admin, upgrade path, or custody.
+- **Epoch structure:** Each epoch commits `merkleRoot`, `jsonlSha256`, `manifestHash`, and `manifestUri` (typically `ar://…`), linked by `parentRoot`. Genesis epochs require `parentRoot = 0`; each subsequent epoch must reference the prior epoch's `merkleRoot`.
+- **Per-publisher chains:** Clients choose one or more trusted publisher addresses. A publisher may publish once and discard its signing key (**keyless genesis**); that chain is then frozen forever — trustless and unowned.
+- **Off-chain verification:** The registry records content hashes and timestamps only; it cannot verify Arweave content, leaf inclusion, or manifest signatures. Clients MUST verify off-chain: fetch manifest by URI → confirm content hash equals `manifestHash` → verify publisher signature → read `merkleRoot` → verify each fetched leaf via its Merkle proof against `merkleRoot` (see section 8).
+- **Multi-chain notaries:** EVM chains are interchangeable notaries. The registry deploys at the same CREATE2 address on every EVM chain (canonical deterministic-deployment proxy at `0x4e59b44847b379578588920cA78FbF26c0B4956C`). Publishers are encouraged to anchor the same `merkleRoot` per epoch on multiple chains.
+- **Canon selection is a client policy, not a protocol rule.** Reference policy: among epochs from the client's trusted publisher(s), prefer a pinned epoch or the latest epoch with valid signature and reproducible lineage; growth is additive via overlay publishers, while genesis chains remain frozen.
 - Loss or censorship of any single chain affects discovery only; data, signatures, and other anchors remain intact.
 
 ## 10. Versioning

@@ -25,7 +25,7 @@ All four commands must pass before you open a pull request. CI runs the same che
 | `compiler/` | `@kargain/vincent-compiler` — private epoch compiler (workspace only) |
 | `pipeline/` | Private WMI generator (`@kargain/vincent-pipeline`) |
 | `docs/` | Normative protocol specification and governance documents |
-| `contracts/` (planned, phase A) | On-chain manifest registry |
+| `contracts/` | `@kargain/vincent-contracts` — private on-chain epoch registry (Hardhat 3) |
 
 Package names use the `@kargain` npm scope. See [README.md](README.md) for the phase roadmap.
 
