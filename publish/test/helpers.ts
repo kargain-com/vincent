@@ -11,6 +11,11 @@ const FIXTURE_DIR = join(
   '../../compiler/fixtures/genesis-mini',
 );
 
+const EPOCH2_FIXTURE_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../compiler/fixtures/genesis-mini-epoch2',
+);
+
 const CHECK_DIGIT_ALPHABET = '0123456789ABCDEFGHJKLMNPRSTUVWXYZ';
 
 export function withValidCheckDigit(template17: string): string {
@@ -36,4 +41,8 @@ export const VIN_PLANT = withValidCheckDigit('1FA12BE05BG123456');
 
 export function loadGenesisMiniClaims(): Claim[] {
   return JSON.parse(readFileSync(join(FIXTURE_DIR, 'claims.json'), 'utf8')) as Claim[];
+}
+
+export function loadGenesisMiniEpoch2Claims(): Claim[] {
+  return JSON.parse(readFileSync(join(EPOCH2_FIXTURE_DIR, 'claims.json'), 'utf8')) as Claim[];
 }

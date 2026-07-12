@@ -1,7 +1,7 @@
 import { parseEther } from 'viem';
 import { describe, expect, it } from 'vitest';
 
-import { preflightGenesisPublish } from '../src/preflight-genesis-publish.js';
+import { preflightEpochPublish, preflightGenesisPublish } from '../src/preflight-genesis-publish.js';
 import { TEST_PRIVATE_KEY, TEST_PUBLISHER } from '../src/constants.js';
 import { createMockChainPublisher } from './mock-chain-publisher.js';
 
@@ -87,6 +87,37 @@ describe('preflightGenesisPublish', () => {
     ).rejects.toThrow(/Insufficient Base Sepolia balance/);
   });
 
+  it('rejects when registry epochCount lookup fails', async () => {
+    await expect(
+      preflightGenesisPublish({
+        privateKeyHex: TEST_PRIVATE_KEY,
+        publisher: TEST_PUBLISHER,
+        epochCountReader: {
+          readEpochCount: async () => {
+            throw new Error('rpc down');
+          },
+        },
+        preflight: PREFLIGHT_BASE,
+      }),
+    ).rejects.toThrow(/Registry epochCount check failed: rpc down/);
+  });
+
+  it('rejects when Irys payment RPC lookup fails', async () => {
+    await expect(
+      preflightGenesisPublish({
+        privateKeyHex: TEST_PRIVATE_KEY,
+        publisher: TEST_PUBLISHER,
+        epochCountReader: createMockChainPublisher(),
+        preflight: {
+          ...PREFLIGHT_BASE,
+          getIrysPaymentBalance: async () => {
+            throw new Error('connection refused');
+          },
+        },
+      }),
+    ).rejects.toThrow(/Ethereum Sepolia RPC unavailable for Irys/);
+  });
+
   it('rejects when Irys payment balance is below minimum', async () => {
     await expect(
       preflightGenesisPublish({
@@ -132,5 +163,83 @@ describe('preflightGenesisPublish', () => {
         },
       }),
     ).rejects.toThrow(/Irys GraphQL unavailable.*HTTP 404/);
+  });
+});
+
+describe('preflightEpochPublish incremental mode', () => {
+  it('passes when prior epoch exists and readLatestEpoch succeeds', async () => {
+    const epochCountReader = createMockChainPublisher();
+    await epochCountReader.publishEpoch({
+      merkleRoot: `0x${'1'.repeat(64)}`,
+      jsonlSha256: `0x${'2'.repeat(64)}`,
+      manifestHash: `0x${'3'.repeat(64)}`,
+      parentRoot: `0x${'0'.repeat(64)}`,
+      manifestUri: 'ar://genesis',
+    });
+
+    await expect(
+      preflightEpochPublish({
+        privateKeyHex: TEST_PRIVATE_KEY,
+        publisher: TEST_PUBLISHER,
+        epochCountReader,
+        readLatestEpoch: epochCountReader.readLatestEpoch.bind(epochCountReader),
+        preflight: {
+          ...PREFLIGHT_BASE,
+          requireGenesis: false,
+          targetEpochNumber: 2,
+        },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects incremental preflight without readLatestEpoch when count > 0', async () => {
+    const epochCountReader = createMockChainPublisher();
+    await epochCountReader.publishEpoch({
+      merkleRoot: `0x${'1'.repeat(64)}`,
+      jsonlSha256: `0x${'2'.repeat(64)}`,
+      manifestHash: `0x${'3'.repeat(64)}`,
+      parentRoot: `0x${'0'.repeat(64)}`,
+      manifestUri: 'ar://genesis',
+    });
+
+    await expect(
+      preflightEpochPublish({
+        privateKeyHex: TEST_PRIVATE_KEY,
+        publisher: TEST_PUBLISHER,
+        epochCountReader,
+        preflight: {
+          ...PREFLIGHT_BASE,
+          requireGenesis: false,
+          targetEpochNumber: 2,
+        },
+      }),
+    ).rejects.toThrow(/Incremental preflight requires chainReader with readLatestEpoch/);
+  });
+
+  it('wraps readLatestEpoch failures', async () => {
+    const epochCountReader = createMockChainPublisher();
+    await epochCountReader.publishEpoch({
+      merkleRoot: `0x${'1'.repeat(64)}`,
+      jsonlSha256: `0x${'2'.repeat(64)}`,
+      manifestHash: `0x${'3'.repeat(64)}`,
+      parentRoot: `0x${'0'.repeat(64)}`,
+      manifestUri: 'ar://genesis',
+    });
+
+    await expect(
+      preflightEpochPublish({
+        privateKeyHex: TEST_PRIVATE_KEY,
+        publisher: TEST_PUBLISHER,
+        epochCountReader,
+        readLatestEpoch: async () => {
+          throw new Error('latest epoch unavailable');
+        },
+        preflight: {
+          ...PREFLIGHT_BASE,
+          requireGenesis: false,
+          targetEpochNumber: 2,
+        },
+      }),
+    ).rejects.toThrow(/Registry latest epoch check failed: latest epoch unavailable/);
   });
 });

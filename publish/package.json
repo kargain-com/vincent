@@ -17,7 +17,8 @@
     "test": "vitest run --no-file-parallelism",
     "prevalidate:full-sim": "pnpm --filter @kargain/vincent-contracts build",
     "validate:full-sim": "node --max-old-space-size=8192 ./node_modules/vitest/vitest.mjs run --config vitest.full-sim.config.ts --no-file-parallelism",
-    "publish:genesis": "node dist/cli/publish-genesis.js"
+    "publish:epoch": "node dist/cli/publish-epoch.js",
+    "publish:genesis": "node dist/cli/publish-epoch.js --genesis"
   },
   "dependencies": {
     "@irys/upload": "^0.0.3",

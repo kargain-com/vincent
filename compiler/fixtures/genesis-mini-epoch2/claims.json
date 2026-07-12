@@ -1,0 +1,163 @@
+[
+  {
+    "schemaVersion": "1.0",
+    "type": "wmi",
+    "key": {
+      "wmi": "1FA"
+    },
+    "value": {
+      "manufacturer": "Ford",
+      "country": "US",
+      "vehicleType": "Passenger Car",
+      "region": "NA"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-schema",
+    "key": {
+      "name": "Genesis mini test schema"
+    },
+    "value": {},
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-binding",
+    "key": {
+      "wmi": "1FA",
+      "yearFrom": 2010,
+      "yearTo": 2012,
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556"
+    },
+    "value": {},
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-binding",
+    "key": {
+      "wmi": "1FA",
+      "yearFrom": 2013,
+      "yearTo": null,
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556"
+    },
+    "value": {},
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-pattern",
+    "key": {
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
+      "match": {
+        "vds": "**BC"
+      }
+    },
+    "value": {
+      "attribute": "bodyType",
+      "code": "Sedan"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-pattern",
+    "key": {
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
+      "match": {
+        "vds": "**BD"
+      }
+    },
+    "value": {
+      "attribute": "fuelType",
+      "code": "Gasoline"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-pattern",
+    "key": {
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
+      "match": {
+        "vds": "**BB",
+        "vis": "*G"
+      }
+    },
+    "value": {
+      "attribute": "model",
+      "code": "Fusion-OLD"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-pattern",
+    "key": {
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
+      "match": {
+        "vds": "**BE"
+      }
+    },
+    "value": {
+      "attribute": "plant",
+      "code": "Detroit"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.0",
+    "type": "wmi",
+    "key": {
+      "wmi": "VF3"
+    },
+    "value": {
+      "manufacturer": "Peugeot",
+      "country": "FR",
+      "vehicleType": "Passenger Car",
+      "region": "EU"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.0",
+    "type": "year-hint",
+    "key": {
+      "wmi": "1FA"
+    },
+    "value": {
+      "cycleRule": "na-standard"
+    },
+    "provenance": "community/observation",
+    "license": "CC0-1.0"
+  },
+  {
+    "schemaVersion": "1.1",
+    "type": "vds-pattern",
+    "key": {
+      "schema": "sha256:8aaae43c9cb200511b2d99298578d2603d6840398062e376c99abeed673e9556",
+      "match": {
+        "vds": "**BB",
+        "vis": "*G"
+      }
+    },
+    "value": {
+      "attribute": "model",
+      "code": "Fusion"
+    },
+    "provenance": "regulatory/us-vpic",
+    "license": "CC0-1.0",
+    "supersedes": "sha256:7798a53da7897cf777ad7ceec83bdc06ba0dcc48567a0ee1cce4a2c44c03b1a5"
+  }
+]

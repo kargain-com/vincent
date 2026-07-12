@@ -264,6 +264,15 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 - The canonical JSONL dataset is uploaded as a separate artifact; its `ar://` URI appears in `dataset.uris`. Per-WMI leaves are stored as ANS-104 data items tagged by `Epoch` and `LeafKey` (see §7.2); they are not discovered via directory listing or enumerated URIs.
 - Clients MUST verify `jsonlSha256` and `merkleRoot` (and each fetched leaf via its Merkle proof against the anchored root) after every fetch, regardless of source.
 
+### 8.1 Publisher roles (append-only epoch chains)
+
+The same append-only per-publisher epoch chain (§7.2, §9) serves two distinct roles:
+
+- **Foundational genesis** — one epoch on a dedicated publisher address (mainnet US regulatory base). The publisher signs epoch 1 with `parent: null`, then **retires the signing key**. The chain is frozen forever (never extended to epoch 2 on that address). Maximum trust: keyless, unowned, immutable. Publish tooling guards this with `--genesis` / `requireGenesis` (`epochCount` must be 0 before any upload).
+- **Overlay / growth** — live publisher keys used for incremental epochs (testnet integration now; Kargain-operational and community publishers later). Each overlay publisher maintains its own chain: epoch N+1 sets `parentRoot` to the prior epoch's `merkleRoot` on that same address. `latestEpoch` is mutable; clients choose trust — pin a validated epoch via `getEpoch(publisher, index)`, follow `getLatestEpoch`, or apply future N-of-M attestations.
+
+**Isolation:** per-publisher chains are independent. An overlay publisher cannot alter another publisher's chain or the frozen foundational genesis. Past epochs remain immutable by index within each chain.
+
 ## 9. Anchoring and canon selection
 
 - **Anchor contract:** `VincentAnchorRegistry` — immutable, ownerless, permissionless, append-only per-publisher epoch registry. Each publisher maintains an independent epoch chain. Entry point: `publishEpoch(merkleRoot, jsonlSha256, manifestHash, parentRoot, manifestUri)`. The publisher's transaction is the attestation; there is no owner, admin, upgrade path, or custody.
@@ -272,7 +281,7 @@ There is no contributor staking. Sybil pressure, if it materializes, may be addr
 - **Off-chain verification:** The registry records content hashes and timestamps only; it cannot verify Arweave content, leaf inclusion, or manifest signatures. Clients MUST verify off-chain: fetch manifest by URI → confirm content hash equals `manifestHash` → verify publisher signature → read `merkleRoot` → verify each fetched leaf via its Merkle proof against `merkleRoot` (see section 8).
 - **Reference client libraries:** `@kargain/vincent/anchor` (`createAnchorReader`) reads epochs from `VincentAnchorRegistry` and returns protocol `sha256:…` hashes ready for `@kargain/vincent/decoder`. `@kargain/vincent/arweave` (`createArweaveGetLeaf`) is the reference ANS-104 leaf provider; both `getLeaf` and the anchor reader are injectable (mirrors, caches, alternate RPC transports). Canonical registry address: [docs/contracts/README.md](contracts/README.md).
 - **Multi-chain notaries:** EVM chains are interchangeable notaries. The registry deploys at the same CREATE2 address on every EVM chain (canonical deterministic-deployment proxy at `0x4e59b44847b379578588920cA78FbF26c0B4956C`). Publishers are encouraged to anchor the same `merkleRoot` per epoch on multiple chains.
-- **Canon selection is a client policy, not a protocol rule.** Reference policy: among epochs from the client's trusted publisher(s), prefer a pinned epoch or the latest epoch with valid signature and reproducible lineage; growth is additive via overlay publishers, while genesis chains remain frozen.
+- **Canon selection is a client policy, not a protocol rule.** Reference policy: among epochs from the client's trusted publisher(s), prefer a pinned epoch or the latest epoch with valid signature and reproducible lineage; growth is additive via overlay publishers (§8.1), while foundational genesis chains remain frozen.
 - Loss or censorship of any single chain affects discovery only; data, signatures, and other anchors remain intact.
 
 ## 10. Versioning

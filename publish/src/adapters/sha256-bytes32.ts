@@ -8,5 +8,10 @@ export function sha256ContentIdToBytes32(contentId: string): `0x${string}` {
   return `0x${contentId.slice('sha256:'.length)}`;
 }
 
+/** Convert on-chain bytes32 back to protocol sha256 content id. */
+export function bytes32ToContentId(value: `0x${string}`): string {
+  return `sha256:${value.slice(2).toLowerCase()}`;
+}
+
 /** Zero bytes32 for genesis parentRoot on-chain. */
-export const ZERO_BYTES32 = `0x${'0'.repeat(64)}`;
+export const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as `0x${string}`;

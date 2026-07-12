@@ -6,7 +6,11 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, 'test/validate-full-sim.integration.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/publish-genesis.ts', 'src/adapters/sha256-bytes32.ts'],
+      include: [
+        'src/publish-epoch.ts',
+        'src/resolve-epoch-parent.ts',
+        'src/adapters/sha256-bytes32.ts',
+      ],
       exclude: ['src/cli/**', 'src/adapters/irys-devnet-uploader.ts'],
       thresholds: {
         statements: 100,

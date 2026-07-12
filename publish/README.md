@@ -1,10 +1,22 @@
 # @kargain/vincent-publish
 
-Offline epoch manifest build, sign, and genesis publish tooling (Vincent Phase A).
+Offline epoch manifest build, sign, and publish tooling (Vincent Phase A).
 
 This package produces a signed epoch **manifest** that commits `dataset.merkleRoot` and
 `dataset.jsonlSha256`. The manifest is what `VincentAnchorRegistry.publishEpoch` anchors
 on-chain (`manifestHash` + `manifestUri`).
+
+## Publisher roles
+
+The append-only per-publisher epoch chain serves two roles (see [PROTOCOL §8.1](../docs/PROTOCOL.md)):
+
+| | `publish:genesis` / `--genesis` | `publish:epoch` (auto) |
+|---|---|---|
+| **When** | Fresh wallet (`epochCount == 0`) only | Fresh wallet → genesis; used wallet → incremental epoch N+1 |
+| **Key lifecycle** | Retire after mainnet foundational genesis | Keep live for testnet / overlay growth |
+| **Preflight** | Aborts if `epochCount > 0` (`requireGenesis`) | Fetches prior `merkleRoot` when `epochCount > 0` |
+
+Foundational genesis is one epoch per address, keyless and frozen. Overlay publishers reuse the same wallet for dataset updates via incremental epochs linked by `parentRoot`.
 
 ## Manifest shape (genesis / large epochs)
 
@@ -56,23 +68,33 @@ const anchored = await reader.getLatestEpoch(publisher);
 
 The verify-only CLI uses an internal read-only adapter; integrators should use `@kargain/vincent/anchor` directly.
 
-## Genesis publish orchestration (A-2c)
+## Epoch publish orchestration
 
 ```typescript
-import { publishGenesis } from '@kargain/vincent-publish';
+import { publishEpoch, publishGenesis } from '@kargain/vincent-publish';
 import type { Uploader, ChainPublisher } from '@kargain/vincent-publish';
 
-const report = await publishGenesis({
+// Auto: genesis if epochCount == 0, else incremental epoch N+1
+const report = await publishEpoch({
   epoch,              // EpochBuild from compile()
   signerKeyHex,
-  uploader,           // upload(data, tags) => { id, uri }
-  chainPublisher,     // publishEpoch(args) => txHash
+  uploader,
+  chainPublisher,     // publishEpoch(args) + readEpochCount + readLatestEpoch
 });
-// report: { publisher, jsonlUri, manifestUri, manifestHash, txHash, leafCount, manifest }
+
+// Foundational genesis only (fail-closed when epochCount > 0)
+const genesisReport = await publishGenesis({
+  epoch,
+  signerKeyHex,
+  uploader,
+  chainPublisher,
+});
 ```
 
-Sequence: upload leaves → gzip JSONL → build+sign manifest → upload manifest →
-`publishEpoch` on-chain (genesis: `parent: null`, `parentRoot: 0x00…00`).
+`publishEpoch` reads `epochCount` on-chain. When zero: `parentRoot = 0x00…00`, `manifest.parent = null` (epoch 1). When greater than zero: reads the latest epoch's `merkleRoot` as `parentRoot` and sets `manifest.parent` to the same value as `sha256:<hex>`. Then: upload leaves → gzip JSONL → build+sign manifest → upload manifest → `publishEpoch` on-chain.
+
+Sequence (genesis): upload leaves → gzip JSONL → build+sign manifest → upload manifest →
+`publishEpoch` on-chain (`parent: null`, `parentRoot: 0x00…00`). Incremental epochs use the prior `merkleRoot` for both fields.
 
 Adapter interfaces live in [`src/adapters/types.ts`](src/adapters/types.ts). Real adapters
 (Irys devnet, Base Sepolia viem) are in [`src/adapters/`](src/adapters/). The Base
@@ -87,6 +109,11 @@ Requires [`publish/.env.example`](.env.example) variables (never commit keys):
 cp publish/.env.example publish/.env   # fill in locally
 
 pnpm --filter @kargain/vincent-publish build
+
+# Auto: genesis if epochCount == 0, else incremental epoch N+1
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --fixture genesis-mini
+
+# Foundational genesis only (fail-closed on used publisher)
 pnpm --filter @kargain/vincent-publish publish:genesis -- --devnet --fixture genesis-mini
 # or: --full  (reads the full seed and verifies all 20 committed VIN fixtures)
 ```
@@ -111,19 +138,17 @@ Registry: `0x06667DB3795C70F34b7517D1Af1217D3167BE241` on Base Sepolia (84532).
 
 **Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step.
 
-Before uploading, the CLI verifies the private key, `epochCount == 0`, Base Sepolia RPC
-and balance, Ethereum Sepolia RPC and Irys payment balance, Irys devnet uploader
-initialization, and the Irys GraphQL tag-query schema. A failed preflight performs no uploads.
+Before uploading, the CLI verifies the private key, registry state (genesis: `epochCount == 0`; incremental: prior epoch readable), Base Sepolia RPC and balance, Ethereum Sepolia RPC and Irys payment balance, Irys devnet uploader initialization, and the Irys GraphQL tag-query schema. A failed preflight performs no uploads.
 
 After uploads and before the on-chain anchor, the CLI polls GraphQL until every leaf is
 indexed and Merkle-valid. If indexing fails, **no chain transaction is sent**.
 
-### Re-verify an existing genesis (one-shot wallets)
+### Re-verify an existing epoch (verify-only)
 
-Genesis is one epoch per publisher address. To re-check a deployment without re-publishing:
+To re-check a deployment without re-publishing:
 
 ```bash
-pnpm --filter @kargain/vincent-publish publish:genesis -- --devnet --verify-only \
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --verify-only \
   --publisher 0xYourPublisher \
   --manifest-uri ar://YourManifestTxId
 ```
@@ -143,12 +168,11 @@ Regenerate: `pnpm --filter @kargain/vincent-publish build && node publish/script
 pnpm --filter @kargain/vincent-publish test
 ```
 
-Includes offline mock `publishGenesis` e2e (upload → chain → tag getLeaf decode → verifyEpoch).
-`test/genesis-publish-simulation.test.ts` simulates the full founder CLI path — preflight,
-upload, on-chain anchor, manifest verification, and fixture VIN decode — without gas or live RPC.
+Includes offline mock `publishEpoch` / `publishGenesis` e2e (upload → chain → tag getLeaf decode → verifyEpoch).
+`test/genesis-publish-simulation.test.ts` simulates the full founder CLI genesis path; `test/simulate-epoch-publish.ts` covers incremental epoch 2.
 The default fast gate also deploys the real `VincentAnchorRegistry` bytecode to Hardhat EDR,
 pins the mock publisher to the contract across success and revert scenarios, and runs the
-genesis-mini pipeline against the real local contract using funded ephemeral accounts.
+genesis-mini pipeline and full epoch-2 incremental pipeline against the real local contract using funded ephemeral accounts (including `requireGenesis` abort with zero uploads).
 
 The heavier full-seed simulation is opt-in and never contacts a live network:
 

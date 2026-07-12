@@ -4,6 +4,7 @@ import { baseSepolia, sepolia } from 'viem/chains';
 
 import { createIrysDevnetUploader } from './adapters/irys-devnet-uploader.js';
 import { assertGenesisPublisherAvailable, type EpochCountReader } from './assert-genesis-publisher.js';
+import type { EpochChainReader } from './resolve-epoch-parent.js';
 
 /** Minimum Base Sepolia balance required before any permanent Arweave/Irys uploads. */
 export const DEFAULT_MIN_CHAIN_BALANCE_WEI = parseEther('0.0001');
@@ -23,6 +24,13 @@ export interface GenesisPreflightOptions {
   probeIrysUploader?: () => Promise<void>;
   /** Test override for Irys GraphQL availability. */
   probeIrysGraphql?: () => Promise<void>;
+}
+
+export interface EpochPreflightOptions extends GenesisPreflightOptions {
+  /** When true, abort if publisher already has on-chain epochs. */
+  requireGenesis?: boolean;
+  /** Epoch tag for Irys GraphQL probe (defaults to 1). */
+  targetEpochNumber?: number;
 }
 
 function formatError(error: unknown): string {
@@ -61,6 +69,7 @@ async function defaultProbeIrysUploader(
 async function defaultProbeIrysGraphql(
   graphqlUrl: string,
   publisher: string,
+  targetEpochNumber: number,
 ): Promise<void> {
   const owner = publisher.toLowerCase();
   const response = await fetch(graphqlUrl, {
@@ -72,7 +81,7 @@ async function defaultProbeIrysGraphql(
     owners: ["${owner}"]
     tags: [
       { name: "App", values: ["vincent"] }
-      { name: "Epoch", values: ["1"] }
+      { name: "Epoch", values: ["${String(targetEpochNumber)}"] }
     ]
     order: DESC
     first: 1
@@ -111,22 +120,62 @@ export async function preflightGenesisPublish(args: {
   epochCountReader: EpochCountReader;
   preflight: GenesisPreflightOptions;
 }): Promise<void> {
+  await preflightEpochPublish({
+    privateKeyHex: args.privateKeyHex,
+    publisher: args.publisher,
+    epochCountReader: args.epochCountReader,
+    preflight: { ...args.preflight, requireGenesis: true, targetEpochNumber: 1 },
+  });
+}
+
+async function runRegistryPreflight(
+  epochCountReader: EpochCountReader,
+  publisher: string,
+  preflight: EpochPreflightOptions,
+  readLatestEpoch?: EpochChainReader['readLatestEpoch'],
+): Promise<void> {
+  if (preflight.requireGenesis === true) {
+    try {
+      await assertGenesisPublisherAvailable(epochCountReader, publisher);
+    } catch (error) {
+      const message = formatError(error);
+      if (message.includes('already has')) {
+        throw error instanceof Error ? error : new Error(message);
+      }
+      throw new Error(`Registry epochCount check failed: ${message}`, { cause: error });
+    }
+    return;
+  }
+
+  try {
+    const count = await epochCountReader.readEpochCount(publisher as `0x${string}`);
+    if (count > 0n) {
+      if (readLatestEpoch === undefined) {
+        throw new Error('Incremental preflight requires chainReader with readLatestEpoch');
+      }
+      await readLatestEpoch(publisher as `0x${string}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Incremental preflight requires')) {
+      throw error;
+    }
+    throw new Error(`Registry latest epoch check failed: ${formatError(error)}`, {
+      cause: error,
+    });
+  }
+}
+
+async function runSharedPreflight(args: {
+  privateKeyHex: `0x${string}`;
+  publisher: string;
+  preflight: EpochPreflightOptions;
+}): Promise<void> {
   const publisher = toChecksumAddress(args.publisher);
   const derivedPublisher = toChecksumAddress(addressFromPrivateKey(args.privateKeyHex));
   if (derivedPublisher !== publisher) {
     throw new Error(
       `Private key derives ${derivedPublisher}, but expected publisher ${publisher}`,
     );
-  }
-
-  try {
-    await assertGenesisPublisherAvailable(args.epochCountReader, publisher);
-  } catch (error) {
-    const message = formatError(error);
-    if (message.includes('already has')) {
-      throw error instanceof Error ? error : new Error(message);
-    }
-    throw new Error(`Registry epochCount check failed: ${message}`, { cause: error });
   }
 
   const minBalance = args.preflight.minChainBalanceWei ?? DEFAULT_MIN_CHAIN_BALANCE_WEI;
@@ -187,11 +236,13 @@ export async function preflightGenesisPublish(args: {
     }
   }
 
+  const targetEpochNumber = args.preflight.targetEpochNumber ?? 1;
   const probeGraphql =
     args.preflight.probeIrysGraphql ??
     (args.preflight.irysGraphqlUrl === undefined
       ? undefined
-      : () => defaultProbeIrysGraphql(args.preflight.irysGraphqlUrl!, publisher));
+      : () =>
+          defaultProbeIrysGraphql(args.preflight.irysGraphqlUrl!, publisher, targetEpochNumber));
   if (probeGraphql !== undefined) {
     try {
       await probeGraphql();
@@ -202,4 +253,31 @@ export async function preflightGenesisPublish(args: {
       );
     }
   }
+}
+
+/**
+ * Validate wallet, RPC, balances, registry state, and Irys connectivity before uploads.
+ * Genesis mode (`requireGenesis: true`) aborts when epochCount > 0; incremental mode
+ * confirms the prior epoch is readable instead.
+ */
+export async function preflightEpochPublish(args: {
+  privateKeyHex: `0x${string}`;
+  publisher: string;
+  epochCountReader: EpochCountReader;
+  preflight: EpochPreflightOptions;
+  readLatestEpoch?: EpochChainReader['readLatestEpoch'];
+}): Promise<void> {
+  const publisher = toChecksumAddress(args.publisher);
+
+  await runRegistryPreflight(
+    args.epochCountReader,
+    publisher,
+    args.preflight,
+    args.readLatestEpoch,
+  );
+  await runSharedPreflight({
+    privateKeyHex: args.privateKeyHex,
+    publisher,
+    preflight: args.preflight,
+  });
 }

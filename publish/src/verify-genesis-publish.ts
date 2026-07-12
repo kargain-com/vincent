@@ -3,7 +3,7 @@ import { createDecoder } from '@kargain/vincent/decoder';
 import type { Manifest } from '@kargain/vincent/protocol';
 
 import type { OnChainEpoch } from './adapters/base-sepolia-publisher.js';
-import { sha256ContentIdToBytes32 } from './adapters/sha256-bytes32.js';
+import { bytes32ToContentId, sha256ContentIdToBytes32 } from './adapters/sha256-bytes32.js';
 import type { PublishGenesisReport } from './adapters/types.js';
 import {
   VIN_2011,
@@ -26,15 +26,13 @@ export interface VerifyGenesisPublishOptions {
   graphqlUrl: string;
   fixture: 'genesis-mini' | 'full';
   fetchImpl?: typeof fetch;
+  /** Leaf tag epoch for getLeaf (defaults to report.manifest.epoch). */
+  epochNumber?: number;
 }
 
 export interface VerifyGenesisPublishResult {
   ok: boolean;
   failures: string[];
-}
-
-function bytes32ToContentId(value: `0x${string}`): string {
-  return `sha256:${value.slice(2).toLowerCase()}`;
 }
 
 function arUriToGatewayUrl(gatewayUrl: string, uri: string): string {
@@ -62,6 +60,7 @@ async function verifyFixtureVins(
   graphqlUrl: string,
   publisher: string,
   merkleRoot: string,
+  epochNumber: number,
   fetchImpl: typeof fetch,
 ): Promise<string[]> {
   const failures: string[] = [];
@@ -69,7 +68,7 @@ async function verifyFixtureVins(
     gatewayUrl,
     graphqlUrl,
     publisher,
-    epoch: 1,
+    epoch: epochNumber,
     fetchImpl,
   });
   const decoder = createDecoder({ merkleRoot, getLeaf });
@@ -97,7 +96,8 @@ async function verifyFixtureVins(
   }
 
   const plant = await decoder.decode(VIN_PLANT);
-  if (plant.attributes.find((attr) => attr.attribute === 'plant')?.value !== 'Chicago') {
+  const expectedPlant = epochNumber === 2 ? 'Detroit' : 'Chicago';
+  if (plant.attributes.find((attr) => attr.attribute === 'plant')?.value !== expectedPlant) {
     failures.push(`decode plant: ${JSON.stringify(plant.errors)}`);
   }
 
@@ -109,13 +109,14 @@ async function verifySeedFixtureVins(
   graphqlUrl: string,
   publisher: string,
   merkleRoot: string,
+  epochNumber: number,
   fetchImpl: typeof fetch,
 ): Promise<string[]> {
   const getLeaf = createArweaveGetLeaf({
     gatewayUrl,
     graphqlUrl,
     publisher,
-    epoch: 1,
+    epoch: epochNumber,
     fetchImpl,
   });
   const decoder = createDecoder({ merkleRoot, getLeaf });
@@ -162,6 +163,7 @@ export async function verifyGenesisPublish(
   const failures: string[] = [];
   const fetchImpl = options.fetchImpl ?? fetch;
   const { report } = options;
+  const epochNumber = options.epochNumber ?? report.manifest.epoch;
 
   const onChain = await options.chainPublisher.waitForLatestEpoch(
     report.publisher as `0x${string}`,
@@ -201,6 +203,7 @@ export async function verifyGenesisPublish(
         options.graphqlUrl,
         report.publisher.toLowerCase(),
         report.manifest.dataset.merkleRoot,
+        epochNumber,
         fetchImpl,
       )),
     );
@@ -211,6 +214,7 @@ export async function verifyGenesisPublish(
         options.graphqlUrl,
         report.publisher.toLowerCase(),
         report.manifest.dataset.merkleRoot,
+        epochNumber,
         fetchImpl,
       )),
     );

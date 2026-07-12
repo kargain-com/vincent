@@ -95,24 +95,6 @@ describe('publishGenesis offline mock e2e', () => {
     expect(JSON.stringify(result2011.attributes)).not.toContain('Fusion-OLD');
   });
 
-  it('rejects non-genesis epoch numbers', async () => {
-    const claims = loadGenesisMiniClaims();
-    const built = compile(claims, {});
-    if (!built.ok) {
-      throw new Error(built.error.message);
-    }
-
-    await expect(
-      publishGenesis({
-        epoch: built.value,
-        signerKeyHex: TEST_PRIVATE_KEY,
-        uploader: createMockUploader(),
-        chainPublisher: createMockChainPublisher(),
-        epochNumber: 2,
-      }),
-    ).rejects.toThrow(/genesis epoch 1 only/);
-  });
-
   it('rejects a second genesis publish for the same publisher', async () => {
     const claims = loadGenesisMiniClaims();
     const built = compile(claims, {});
@@ -130,16 +112,18 @@ describe('publishGenesis offline mock e2e', () => {
       chainPublisher,
     });
 
+    const secondUploader = createMockUploader();
     await expect(
       publishGenesis({
         epoch: built.value,
         signerKeyHex: TEST_PRIVATE_KEY,
-        uploader: createMockUploader(),
+        uploader: secondUploader,
         chainPublisher,
       }),
-    ).rejects.toThrow(/parentRoot mismatch/);
+    ).rejects.toThrow(/already has 1 on-chain epoch/);
 
     expect(chainPublisher.calls).toHaveLength(1);
+    expect(secondUploader.records).toHaveLength(0);
   });
 
   it('preflight aborts before any uploader.upload when publisher already has epochs', async () => {

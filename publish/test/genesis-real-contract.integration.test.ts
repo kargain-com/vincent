@@ -2,15 +2,17 @@ import { compile } from '@kargain/vincent-compiler';
 import { describe, expect, it } from 'vitest';
 
 import { sha256ContentIdToBytes32, ZERO_BYTES32 } from '../src/adapters/sha256-bytes32.js';
-import { publishGenesis } from '../src/publish-genesis.js';
+import { publishEpoch } from '../src/publish-epoch.js';
 import { createLiveMockIrysFetchImpl } from './live-mock-irys-fetch.js';
 import { getLocalChainHarness } from './local-chain-harness.js';
 import { createMockUploader } from './mock-uploader.js';
-import { loadGenesisMiniClaims } from './helpers.js';
+import { loadGenesisMiniClaims, loadGenesisMiniEpoch2Claims } from './helpers.js';
 import {
   mockPreflightOverrides,
   simulateGenesisMiniPublish,
 } from './simulate-genesis-publish.js';
+import { mockEpochPreflightOverrides, simulateEpoch2MiniPublish } from './simulate-epoch-publish.js';
+import { publishGenesis } from '../src/publish-genesis.js';
 
 function compileGenesisMini() {
   const built = compile(loadGenesisMiniClaims(), {});
@@ -118,7 +120,7 @@ describe('genesis pipeline against real local VincentAnchorRegistry', () => {
     expect(await chainPublisher.readEpochCount(account.address)).toBe(0n);
   });
 
-  it('publishes epoch 2 with the prior on-chain merkleRoot', async () => {
+  it('publishes epoch 2 via full pipeline with prior on-chain merkleRoot', async () => {
     const harness = await getLocalChainHarness();
     const account = harness.getAccount(13);
     const chainPublisher = harness.createPublisher(13);
@@ -126,23 +128,60 @@ describe('genesis pipeline against real local VincentAnchorRegistry', () => {
       signerKeyHex: account.privateKeyHex,
       chainPublisher,
     });
-    const parentRoot = sha256ContentIdToBytes32(genesis.report.manifest.dataset.merkleRoot);
 
-    await chainPublisher.publishEpoch({
-      merkleRoot: `0x${'a'.repeat(64)}`,
-      jsonlSha256: `0x${'b'.repeat(64)}`,
-      manifestHash: `0x${'c'.repeat(64)}`,
-      parentRoot,
-      manifestUri: 'ar://epoch-2',
+    const epoch2 = await simulateEpoch2MiniPublish({
+      signerKeyHex: account.privateKeyHex,
+      chainPublisher,
+      preflight: mockEpochPreflightOverrides(),
     });
 
+    const parentRoot = sha256ContentIdToBytes32(genesis.report.manifest.dataset.merkleRoot);
+
+    expect(epoch2.verification).toEqual({ ok: true, failures: [] });
+    expect(epoch2.report.manifest.epoch).toBe(2);
+    expect(epoch2.report.manifest.parent).toBe(genesis.report.manifest.dataset.merkleRoot);
     expect(await chainPublisher.readEpochCount(account.address)).toBe(2n);
     expect(await chainPublisher.readLatestEpoch(account.address)).toEqual(
       expect.objectContaining({
-        merkleRoot: `0x${'a'.repeat(64)}`,
         parentRoot,
-        manifestUri: 'ar://epoch-2',
+        manifestUri: epoch2.report.manifestUri,
       }),
     );
+  });
+
+  it('requireGenesis aborts before upload when publisher already has an epoch', async () => {
+    const harness = await getLocalChainHarness();
+    const account = harness.getAccount(14);
+    const chainPublisher = harness.createPublisher(14);
+    const epoch = compile(loadGenesisMiniClaims(), {});
+    if (!epoch.ok) {
+      throw new Error(epoch.error.message);
+    }
+
+    await publishGenesis({
+      epoch: epoch.value,
+      signerKeyHex: account.privateKeyHex,
+      uploader: createMockUploader(),
+      chainPublisher,
+    });
+
+    const epoch2Built = compile(loadGenesisMiniEpoch2Claims(), {});
+    if (!epoch2Built.ok) {
+      throw new Error(epoch2Built.error.message);
+    }
+
+    const secondUploader = createMockUploader();
+    await expect(
+      publishEpoch({
+        epoch: epoch2Built.value,
+        signerKeyHex: account.privateKeyHex,
+        uploader: secondUploader,
+        chainPublisher,
+        requireGenesis: true,
+        preflight: mockPreflightOverrides(),
+      }),
+    ).rejects.toThrow(/already has 1 on-chain epoch/);
+
+    expect(secondUploader.records).toHaveLength(0);
   });
 });

@@ -12,6 +12,8 @@ export {
   ZERO_MERKLE_ROOT,
 } from './constants.js';
 export { publishGenesis } from './publish-genesis.js';
+export { publishEpoch } from './publish-epoch.js';
+export { resolveEpochParent } from './resolve-epoch-parent.js';
 export { manifestHash, signManifest, verifySignedManifest } from './sign-manifest.js';
 export type {
   BuildManifestInput,
@@ -28,4 +30,6 @@ export type {
   Uploader,
 } from './adapters/types.js';
 export type { PublishGenesisDeps } from './publish-genesis.js';
-export { sha256ContentIdToBytes32, ZERO_BYTES32 } from './adapters/sha256-bytes32.js';
+export type { PublishEpochDeps, PublishEpochReport, LeafIndexCheckOptions } from './publish-epoch.js';
+export type { EpochChainReader, ResolvedEpochParent } from './resolve-epoch-parent.js';
+export { bytes32ToContentId, sha256ContentIdToBytes32, ZERO_BYTES32 } from './adapters/sha256-bytes32.js';
