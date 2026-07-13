@@ -34,6 +34,12 @@ export const IRYS_DEVNET_BUNDLER_URL = 'https://devnet.irys.xyz';
 /** Irys fund() gas multiplier for congested testnets (matches Kargain). */
 export const IRYS_FUND_FEE_MULTIPLIER = 1.2;
 
+/** Per-request Irys bundler timeout (matches Kargain web uploader). */
+export const IRYS_UPLOAD_TIMEOUT_MS = 120_000;
+
+/** Retries for transient Irys upload failures (ETIMEDOUT, 5xx, etc.). */
+export const IRYS_UPLOAD_MAX_ATTEMPTS = 5;
+
 /** Irys data retrieval and ANS-104 tag-query endpoints. */
 export const IRYS_GATEWAY_URL = 'https://gateway.irys.xyz';
 export const IRYS_GRAPHQL_URL = 'https://uploader.irys.xyz/graphql';

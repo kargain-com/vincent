@@ -359,6 +359,12 @@ async function runPublish(options: CliOptions): Promise<void> {
   const uploader = await createIrysDevnetUploader({
     privateKeyHex: privateKey,
     rpcUrl,
+    onUploadRetry: ({ attempt, maxAttempts, error }) => {
+      const detail = error instanceof Error ? error.message : String(error);
+      process.stderr.write(
+        `Irys upload retry ${String(attempt)}/${String(maxAttempts)} (${detail})\n`,
+      );
+    },
   });
 
   process.stdout.write(
