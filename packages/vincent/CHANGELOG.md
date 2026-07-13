@@ -1,9 +1,10 @@
 # @kargain/vincent
 
-## 0.10.0
+## 0.8.0
 
 ### Minor Changes
 
+- **Note:** npm last published **0.7.0**; this release publishes accumulated SDK changes under **0.8.0**.
 - **Gateway-first Arweave helpers:** `createArweaveGetLeafWithUris` (checkpoint `leafUris` hint layer), `fetchLeafFromGateway`, `verifyLeafFromGateway`, `resolveLeafTxId`, `leafTxIdToUri`, and bulk `backfillLeafUrisFromGraphql` (owner+epoch GraphQL pagination).
 - **Leaf URI sidecar (optional hint index):** `buildLeafUriSidecar`, `parseLeafUriSidecar`, `validateLeafUriSidecar`, `serializeLeafUriSidecar`, `fetchLeafUriSidecar`, `discoverLeafUriSidecar`, `resolveVerifierLeafUris`, and `LEAF_URI_SIDECAR_KIND` (`Kind=leaf-uris` bulk index bound to epoch fingerprint; normative per-leaf discovery unchanged).
 

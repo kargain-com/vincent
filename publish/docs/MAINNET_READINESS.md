@@ -39,7 +39,7 @@ flowchart LR
 | Irys upload | [`createIrysUploader`](../src/adapters/irys-uploader.ts) + `resolveIrysBundlerUrl` | Same (8453 → node2.irys.xyz) | P1 done |
 | Gateway | per-network default via `resolveIrysGatewayUrl` | `gateway.irys.xyz` | P1 done |
 | GraphQL | `uploader.irys.xyz/graphql` | Same | Shared |
-| SDK `getLeaf` | `createArweaveGetLeafWithUris`, `resolveLeafTxId`, `backfillLeafUrisFromGraphql`, `fetchLeafFromGateway`, `resolveVerifierLeafUris`, `discoverLeafUriSidecar` in `@kargain/vincent` 0.10.0 | Same | Done |
+| SDK `getLeaf` | `createArweaveGetLeafWithUris`, `resolveLeafTxId`, `backfillLeafUrisFromGraphql`, `fetchLeafFromGateway`, `resolveVerifierLeafUris`, `discoverLeafUriSidecar` in `@kargain/vincent` 0.8.0 | Same | Done |
 | Publish API | Root exports: checkpoint, sidecar helpers, `verifyGenesisPublish`, dual-network adapters | Same surface on mainnet profile | Done |
 | v1 migration | B2 `needsLeafUriBackfillHint` → run `backfill:leaf-uris` | Same | Done |
 | Timing | 180s pre-index delay, 60s post-reupload (full devnet) | 30s pre-index, 5s post-reupload; re-upload opt-in | P1 done |

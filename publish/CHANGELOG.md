@@ -11,7 +11,7 @@
 - Mainnet re-upload guards (`--allow-reupload`, `--max-reupload-leaves`) and mainnet timing defaults.
 
 - Updated dependencies
-  - @kargain/vincent@0.10.0
+  - @kargain/vincent@0.8.0
 
 ## 0.0.2
 
