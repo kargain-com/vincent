@@ -14,21 +14,20 @@ Living maintainer doc for `@kargain/vincent-publish` and Kargain integration. An
 flowchart LR
   subgraph portable [Portable today]
     SDK["@kargain/vincent/arweave + decoder"]
-    Checkpoint[Checkpoint v2 + backfill]
-    Verify[verifyGenesisPublish + leafUris]
+    Checkpoint[Checkpoint v2 + backfill + sidecar]
+    Verify[verifyGenesisPublish + resolveVerifierLeafUris]
   end
-  subgraph testnetOnly [Testnet rails today]
-    CLI["--devnet gate"]
-    IrysDev[createIrysDevnetUploader]
-    ChainSepolia[createBaseSepoliaPublisher]
+  subgraph dualNetwork [Dual-network CLI]
+    Network["--network base-sepolia|base"]
+    IrysUnified[createIrysUploader]
+    RegistryUnified[createRegistryPublisher]
   end
-  subgraph mainnetLater [Mainnet later]
-    IrysMain[mainnet Irys uploader]
-    ChainMain[Base mainnet publisher]
+  subgraph mainnetLater [Mainnet ops later]
     Deploy[Registry deploy 8453]
+    Smoke[Live mainnet Irys smoke]
   end
-  portable --> testnetOnly
-  testnetOnly --> mainnetLater
+  portable --> dualNetwork
+  dualNetwork --> mainnetLater
 ```
 
 ## Dual-network matrix
@@ -40,10 +39,10 @@ flowchart LR
 | Irys upload | [`createIrysUploader`](../src/adapters/irys-uploader.ts) + `resolveIrysBundlerUrl` | Same (8453 → node2.irys.xyz) | P1 done |
 | Gateway | per-network default via `resolveIrysGatewayUrl` | `gateway.irys.xyz` | P1 done |
 | GraphQL | `uploader.irys.xyz/graphql` | Same | Shared |
-| SDK `getLeaf` | `createArweaveGetLeafWithUris`, `resolveLeafTxId`, `backfillLeafUrisFromGraphql`, `fetchLeafFromGateway` in `@kargain/vincent` 0.10.0 | Same | Done |
-| Publish API | Root exports: checkpoint, `verifyGenesisPublish`, `verifyUploadedLeaves`, backfill, Base Sepolia (B1) | + mainnet adapters when C lands | Testnet adapters exported |
+| SDK `getLeaf` | `createArweaveGetLeafWithUris`, `resolveLeafTxId`, `backfillLeafUrisFromGraphql`, `fetchLeafFromGateway`, `resolveVerifierLeafUris`, `discoverLeafUriSidecar` in `@kargain/vincent` 0.10.0 | Same | Done |
+| Publish API | Root exports: checkpoint, sidecar helpers, `verifyGenesisPublish`, dual-network adapters | Same surface on mainnet profile | Done |
 | v1 migration | B2 `needsLeafUriBackfillHint` → run `backfill:leaf-uris` | Same | Done |
-| Timing | 180s pre-index delay, 60s post-reupload (full) | Likely 0–30s on mainnet | Devnet-tuned |
+| Timing | 180s pre-index delay, 60s post-reupload (full devnet) | 30s pre-index, 5s post-reupload; re-upload opt-in | P1 done |
 
 ## Completed (architecture + integration)
 
@@ -55,7 +54,7 @@ flowchart LR
 - [x] Bulk `backfill-leaf-uris` CLI + `backfillLeafUrisFromGraphql`
 - [x] `waitForLatestEpoch` race guard (`minEpochCount` + `expectedManifestUri`)
 - [x] Live devnet validation: epoch 2 backfill + `PASS --verify-only` (founder-run)
-- [x] 131+ publish tests + SDK arweave tests green
+- [x] 171+ publish tests + SDK arweave tests green; `pnpm validate:full-sim` (full seed, 20 VIN fixtures)
 
 ## Backlog
 
@@ -83,7 +82,7 @@ flowchart LR
 - [ ] Lift “Do not deploy to mainnet” guard in [contracts/README.md](../../contracts/README.md) when ready
 - [ ] Live mainnet Irys smoke test (upload + gateway + GraphQL + anchor)
 - [ ] Foundational genesis key retirement playbook ([PROTOCOL §8.1](../../docs/PROTOCOL.md))
-- [ ] Optional: `leafUris` sidecar / bulk index for third-party verifiers without local checkpoint
+- [x] Optional: `leafUris` sidecar / bulk index for third-party verifiers (`Kind=leaf-uris`, export/publish CLIs, verify discovery)
 
 ## Risks
 
@@ -92,7 +91,7 @@ flowchart LR
 | GraphQL query drift (publish vs SDK) | High | Consolidated in `@kargain/vincent/arweave` (A1) | Mitigated |
 | Publisher address case mismatch in GraphQL | Medium | `normalizePublisherAddress` (lowercase) in SDK | Mitigated |
 | Re-upload ×2 on ~14k leaves on mainnet | High | Cost guard / `--allow-reupload` (P1) | Mitigated (opt-in re-upload) |
-| `leafUris` only in local checkpoint | Medium | Ops: backfill CLI; optional protocol sidecar (P2) | Accepted ops constraint |
+| `leafUris` only in local checkpoint | Medium | Ops: backfill CLI; optional `Kind=leaf-uris` sidecar | Mitigated |
 | v1 checkpoint without `leafUris` | Low | Auto stderr hint + `backfill:leaf-uris` (B2) | Mitigated |
 | `waitForLatestEpoch` default 6s polling | Low | Configurable `maxAttempts` / `delayMs` | Tunable |
 | Devnet-only CLI and upload rails | High | P1 unified network profile | Mitigated |

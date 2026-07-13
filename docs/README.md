@@ -11,7 +11,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose changes to these do
 
 ## Library
 
-Published npm package: [`@kargain/vincent`](../packages/vincent) (0.7.0) — six entry points:
+Published npm package: [`@kargain/vincent`](../packages/vincent) (0.10.0) — six entry points:
 
 | Subpath | Purpose | Optional peer |
 |---------|---------|---------------|

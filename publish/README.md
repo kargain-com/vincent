@@ -49,8 +49,13 @@ exported from the package root for automation without reaching into CLI internal
 import {
   publishEpoch,
   createBaseSepoliaPublisher,
+  createRegistryPublisher,
+  resolvePublishNetwork,
   loadOrCreateCheckpoint,
   backfillLeafUrisFromGraphql,
+  buildLeafUriSidecar,
+  publishLeafUriSidecarFromCheckpoint,
+  resolveVerifierLeafUris,
   verifyUploadedLeaves,
   verifyGenesisPublish,
 } from '@kargain/vincent-publish';
@@ -62,9 +67,9 @@ import type {
 ```
 
 Low-level Arweave primitives (`resolveLeafTxId`, `createArweaveGetLeafWithUris`,
-`fetchLeafFromGateway`) live on `@kargain/vincent/arweave` — use those for decoder
-clients; use `verifyGenesisPublish` + checkpoint `leafUris` for post-anchor publish
-verification.
+`fetchLeafFromGateway`, `resolveVerifierLeafUris`, `discoverLeafUriSidecar`) live on
+`@kargain/vincent/arweave` — use those for decoder clients; use `verifyGenesisPublish` +
+checkpoint `leafUris` or sidecar URI for post-anchor publish verification.
 
 For Base mainnet (or any viem `Chain`), use `createRegistryPublisher({ chain: base, rpcUrl, privateKeyHex })` from `@kargain/vincent-publish` (`base` from `viem/chains`). `createBaseSepoliaPublisher` remains a Base Sepolia default wrapper for testnet CLI flows.
 
@@ -208,6 +213,11 @@ The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves in 
 | `--index-check-delay=MS` | Pause before index-check (default **180000** after upload; **0** for `--anchor-only`) |
 | `--index-check-timeout=MS` | Per-leaf GraphQL poll budget (default **120000** for `--full`) |
 | `--checkpoint-file=PATH` | Checkpoint path (default `publish/.vincent-publish-checkpoint.json`) |
+| `--publish-leaf-uris-sidecar` | After index-check, opt-in upload `Kind=leaf-uris` bulk index (warn-only on failure) |
+| `--allow-reupload` | Enable index-check re-upload on mainnet (off by default) |
+| `--max-reupload-leaves=N` | Cap re-uploads during index-check (mainnet full default **50**) |
+| `--leaf-uris-uri ar://...` | Verify-only: explicit sidecar URI |
+| `--no-discover-leaf-uris-sidecar` | Verify-only: skip GraphQL `Kind=leaf-uris` discovery |
 
 **Checkpoint file** (`.vincent-publish-checkpoint.json`, gitignored, schema v2) tracks each phase separately, plus optional JSONL/manifest URIs:
 
@@ -217,6 +227,7 @@ The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves in 
 | `indexVerifiedLeafKeys` | Leaves confirmed by index-check — index-check resume (`--anchor-only`) |
 | `failedLeafKeys` | Leaves that failed the last index-check — input for `--retry-failed` |
 | `leafUris` | `leafKey → ar://txId` of the latest upload — used by the gateway fallback |
+| `leafUriSidecarUri` | Optional `ar://` of published `Kind=leaf-uris` bulk index |
 
 The fingerprint is `publisher + epochNumber + merkleRoot + jsonlSha256`; delete the file when switching builds or publishers. Old v1 checkpoints are migrated automatically (their `completedLeafKeys` become `indexVerifiedLeafKeys`). The CLI warns on stderr when index-verified leaves exist but `leafUris` is empty — run `backfill:leaf-uris` before `--anchor-only` or `--verify-only`.
 
@@ -224,7 +235,8 @@ The fingerprint is `publisher + epochNumber + merkleRoot + jsonlSha256`; delete 
 
 | Mode | Initial delay | Re-upload attempts | Post re-upload delay |
 |------|---------------|-------------------|----------------------|
-| Full publish | **3 min** bundler catch-up | **2** | **60s** (only if gateway miss after re-upload) |
+| Full publish (devnet) | **3 min** bundler catch-up | **2** | **60s** (only if gateway miss after re-upload) |
+| Full publish (mainnet) | **30s** | **2** (only with `--allow-reupload`) | **5s** |
 | `--anchor-only` | **0** | **2** | **0** |
 
 Preflight quotes only **remaining** upload bytes (leaves not in checkpoint + artifacts not yet valid on Irys). `--retry-failed` quotes only the failed leaf bytes. `--anchor-only` skips the Irys upload budget quote.
@@ -238,6 +250,30 @@ pnpm --filter @kargain/vincent-publish backfill:leaf-uris -- --devnet --epoch 2
 ```
 
 This paginates `transactions(owners, tags: App+Epoch)` (no per-LeafKey filter), extracts `LeafKey` tags, and writes `leafUris` to the checkpoint. Run before `--anchor-only` when many leaves would otherwise re-upload.
+
+### Leaf URI sidecar (third-party verifiers)
+
+Publishers can upload a bulk `leafKey → ar://txId` index as a separate Arweave artifact tagged `Kind=leaf-uris` (bound to epoch fingerprint). Third parties use it with `createArweaveGetLeafWithUris` / `resolveVerifierLeafUris` without a local checkpoint.
+
+```bash
+# Export checkpoint leafUris to JSON
+pnpm --filter @kargain/vincent-publish export:leaf-uris -- \
+  --network base-sepolia --epoch 2 --out leaf-uris-epoch-2.json
+
+# Backfill if needed, upload sidecar, save leafUriSidecarUri in checkpoint
+pnpm --filter @kargain/vincent-publish publish:leaf-uris -- --network base-sepolia --epoch 2
+# Skip GraphQL backfill when checkpoint leafUris is already populated:
+#   ... publish:leaf-uris -- --devnet --epoch 2 --skip-backfill
+
+# Opt-in auto-upload after index-check during full publish
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --publish-leaf-uris-sidecar
+
+# Verify-only: explicit sidecar URI or auto-discover via GraphQL Kind tag
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --verify-only \
+  --publisher <addr> --manifest-uri ar://... --leaf-uris-uri ar://...
+```
+
+`--verify-only` and `verifyGenesisPublish` resolve leaf hints in order: checkpoint `leafUris` → `--leaf-uris-uri` → GraphQL discovery (`Kind=leaf-uris`) → per-leaf GraphQL.
 
 ### Recovery playbook
 
@@ -279,7 +315,7 @@ pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --verify
   --manifest-uri ar://YourManifestTxId
 ```
 
-Post-publish verification waits until on-chain `latestEpoch.manifestUri` matches the report before comparing hashes. Requires `BASE_SEPOLIA_RPC_URL` only (no private key unless set for other tooling).
+Post-publish verification waits until on-chain `latestEpoch.manifestUri` matches the report before comparing hashes. Requires the RPC URL for the selected network (`BASE_SEPOLIA_RPC_URL` for `--devnet`, `BASE_MAINNET_RPC_URL` for `--mainnet`). No private key unless set for other tooling.
 
 ## Fixtures
 
@@ -292,7 +328,10 @@ Regenerate: `pnpm --filter @kargain/vincent-publish build && node publish/script
 
 ```bash
 pnpm --filter @kargain/vincent-publish test
+pnpm validate:full-sim   # full seed (~14k leaves, 20 VIN fixtures; run pnpm generate:seed first)
 ```
+
+Package scripts: `backfill:leaf-uris`, `export:leaf-uris`, `publish:leaf-uris`.
 
 Includes offline mock `publishEpoch` / `publishGenesis` e2e (upload → chain → tag getLeaf decode → verifyEpoch).
 `test/genesis-publish-simulation.test.ts` simulates the full founder CLI genesis path; `test/simulate-epoch-publish.ts` covers incremental epoch 2.

@@ -1,6 +1,6 @@
 # Vincent
 
-**Status:** library `@kargain/vincent` 0.7.0; protocol spec v1.2 published (Merkle-authenticated per-WMI leaves)
+**Status:** library `@kargain/vincent` 0.10.0; protocol spec v1.2 published (Merkle-authenticated per-WMI leaves)
 
 Vincent is an offline-first VIN decoder and an open protocol for community-curated VIN data. Claims are unsigned content-addressed fact cores; attestations and epoch manifests are signed with Ethereum keys. Data is stored content-addressed on Arweave and anchored on EVM chains. The normative protocol specification is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 

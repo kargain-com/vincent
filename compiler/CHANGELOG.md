@@ -6,7 +6,7 @@
 
 - Updated dependencies [771f0e7]
 - Updated dependencies [2273967]
-  - @kargain/vincent@0.7.0
+  - @kargain/vincent@0.10.0
 
 ## 0.0.1
 

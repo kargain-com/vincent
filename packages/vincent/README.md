@@ -125,6 +125,13 @@ Reference `getLeaf` via ANS-104 GraphQL tag queries (`App=vincent`, `Epoch`, `Le
 | `leafTxIdToUri(txId)` | Normalize tx id to `ar://` URI |
 | `fetchLeafFromGateway(gatewayUrl, txIdOrUri, fetchImpl?)` | Direct gateway fetch by tx id (no GraphQL; does not verify Merkle) |
 | `verifyLeafFromGateway({ gatewayUrl, txIdOrUri, merkleRoot, fetchImpl? })` | Gateway fetch + Merkle proof check against epoch root |
+| `buildLeafUriSidecar(fingerprint, leafUris)` | Build `Kind=leaf-uris` sidecar JSON bound to epoch fingerprint |
+| `parseLeafUriSidecar` / `validateLeafUriSidecar` | Parse and fingerprint-bind sidecar JSON |
+| `serializeLeafUriSidecar` | JCS-canonical bytes for permanent upload |
+| `fetchLeafUriSidecar({ gatewayUrl, uri, fingerprint?, fetchImpl? })` | Fetch sidecar from gateway |
+| `discoverLeafUriSidecar({ graphqlUrl, publisher, epoch, fetchImpl? })` | Newest `Kind=leaf-uris` tx for publisher+epoch |
+| `resolveVerifierLeafUris({ ... })` | Resolve hints: explicit `leafUris` → sidecar URI → GraphQL discover → undefined |
+| `LEAF_URI_SIDECAR_KIND` | Tag value `leaf-uris` for bulk index discovery |
 | `LeafNotFoundError` | No matching tagged transaction |
 
 Does not verify Merkle inclusion — `createDecoder` does.

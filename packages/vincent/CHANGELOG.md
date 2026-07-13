@@ -1,5 +1,12 @@
 # @kargain/vincent
 
+## 0.10.0
+
+### Minor Changes
+
+- **Gateway-first Arweave helpers:** `createArweaveGetLeafWithUris` (checkpoint `leafUris` hint layer), `fetchLeafFromGateway`, `verifyLeafFromGateway`, `resolveLeafTxId`, `leafTxIdToUri`, and bulk `backfillLeafUrisFromGraphql` (owner+epoch GraphQL pagination).
+- **Leaf URI sidecar (optional hint index):** `buildLeafUriSidecar`, `parseLeafUriSidecar`, `validateLeafUriSidecar`, `serializeLeafUriSidecar`, `fetchLeafUriSidecar`, `discoverLeafUriSidecar`, `resolveVerifierLeafUris`, and `LEAF_URI_SIDECAR_KIND` (`Kind=leaf-uris` bulk index bound to epoch fingerprint; normative per-leaf discovery unchanged).
+
 ## 0.7.0
 
 ### Minor Changes
