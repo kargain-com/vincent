@@ -19,6 +19,26 @@ export {
 export { buildManifest } from './build-manifest.js';
 export { backfillLeafUrisFromGraphql } from './backfill-leaf-uris.js';
 export {
+  buildLeafUriSidecar,
+  buildLeafUriSidecarFromCheckpoint,
+  discoverLeafUriSidecar,
+  fetchLeafUriSidecar,
+  LEAF_URI_SIDECAR_KIND,
+  LEAF_URI_SIDECAR_SCHEMA_VERSION,
+  leafUriSidecarFingerprintFromCheckpoint,
+  parseLeafUriSidecar,
+  publishLeafUriSidecarFromCheckpoint,
+  resolveVerifierLeafUris,
+  serializeLeafUriSidecar,
+  uploadLeafUriSidecar,
+  validateLeafUriSidecar,
+  type DiscoverLeafUriSidecarOptions,
+  type DiscoverLeafUriSidecarResult,
+  type FetchLeafUriSidecarOptions,
+  type LeafUriSidecar,
+  type LeafUriSidecarFingerprint,
+} from './leaf-uri-sidecar.js';
+export {
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_GENESIS_REVIEW_POLICY,
@@ -61,6 +81,7 @@ export {
   needsLeafUriBackfillHint,
   saveCheckpoint,
   setLeafUri,
+  setLeafUriSidecarUri,
   updateCheckpointUris,
   uploadedLeafKeySet,
   validateCheckpointFingerprint,

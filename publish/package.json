@@ -19,7 +19,9 @@
     "validate:full-sim": "node --max-old-space-size=8192 ./node_modules/vitest/vitest.mjs run --config vitest.full-sim.config.ts --no-file-parallelism",
     "publish:epoch": "pnpm run build && node dist/cli/publish-epoch.js",
     "publish:genesis": "pnpm run build && node dist/cli/publish-epoch.js --genesis",
-    "backfill:leaf-uris": "pnpm run build && node dist/cli/backfill-leaf-uris.js"
+    "backfill:leaf-uris": "pnpm run build && node dist/cli/backfill-leaf-uris.js",
+    "export:leaf-uris": "pnpm run build && node dist/cli/export-leaf-uris.js",
+    "publish:leaf-uris": "pnpm run build && node dist/cli/publish-leaf-uris.js"
   },
   "dependencies": {
     "@irys/upload": "^0.0.3",

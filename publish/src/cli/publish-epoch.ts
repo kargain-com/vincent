@@ -77,6 +77,9 @@ interface CliOptions {
   checkpointFile: string;
   publisher?: string;
   manifestUri?: string;
+  leafUrisUri?: string;
+  publishLeafUrisSidecar: boolean;
+  discoverLeafUriSidecar: boolean;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -87,6 +90,8 @@ function parseArgs(argv: string[]): CliOptions {
   const anchorOnly = argv.includes('--anchor-only');
   const retryFailed = argv.includes('--retry-failed');
   const allowReupload = argv.includes('--allow-reupload');
+  const publishLeafUrisSidecar = argv.includes('--publish-leaf-uris-sidecar');
+  const discoverLeafUriSidecar = !argv.includes('--no-discover-leaf-uris-sidecar');
   const fixtureArg = argv.find((arg) => arg.startsWith('--fixture='));
   const fixtureFlagIndex = argv.indexOf('--fixture');
   const publisherArg = argv.find((arg) => arg.startsWith('--publisher='));
@@ -215,6 +220,15 @@ function parseArgs(argv: string[]): CliOptions {
     manifestUri = argv[manifestFlagIndex + 1];
   }
 
+  const leafUrisUriArg = argv.find((arg) => arg.startsWith('--leaf-uris-uri='));
+  const leafUrisUriFlagIndex = argv.indexOf('--leaf-uris-uri');
+  let leafUrisUri: string | undefined;
+  if (leafUrisUriArg !== undefined) {
+    leafUrisUri = leafUrisUriArg.slice('--leaf-uris-uri='.length);
+  } else if (leafUrisUriFlagIndex >= 0) {
+    leafUrisUri = argv[leafUrisUriFlagIndex + 1];
+  }
+
   return {
     network,
     genesis,
@@ -232,6 +246,9 @@ function parseArgs(argv: string[]): CliOptions {
     checkpointFile,
     publisher,
     manifestUri,
+    leafUrisUri,
+    publishLeafUrisSidecar,
+    discoverLeafUriSidecar,
   };
 }
 
@@ -345,7 +362,9 @@ async function runVerifyOnly(options: CliOptions): Promise<void> {
     graphqlUrl: irysGraphqlUrl,
     fixture: options.fixture,
     epochNumber: manifest.epoch,
-    leafUris: loadCheckpoint(options.checkpointFile)?.leafUris,
+    leafUris: checkpoint?.leafUris,
+    leafUriSidecarUri: options.leafUrisUri ?? checkpoint?.leafUriSidecarUri,
+    discoverLeafUriSidecar: options.discoverLeafUriSidecar,
     waitForLatestEpochOptions: {
       minEpochCount: BigInt(manifest.epoch),
       expectedManifestUri: options.manifestUri,
@@ -621,6 +640,12 @@ async function runPublish(options: CliOptions): Promise<void> {
     requireGenesis: options.genesis ? true : undefined,
     checkpointPath: options.checkpointFile,
     onHint: writeCliHint,
+    leafUriSidecar: options.publishLeafUrisSidecar
+      ? {
+          publish: true,
+          onWarning: writeCliHint,
+        }
+      : undefined,
     uploadScope: options.retryFailed ? 'failed-only' : 'all',
     uploadConcurrency:
       options.uploadConcurrency ?? (options.fixture === 'full' ? DEFAULT_FULL_UPLOAD_CONCURRENCY : 1),
@@ -686,6 +711,9 @@ async function runPublish(options: CliOptions): Promise<void> {
     graphqlUrl: irysGraphqlUrl,
     fixture: options.fixture,
     leafUris: loadCheckpoint(options.checkpointFile)?.leafUris,
+    leafUriSidecarUri:
+      loadCheckpoint(options.checkpointFile)?.leafUriSidecarUri,
+    discoverLeafUriSidecar: options.discoverLeafUriSidecar,
     waitForLatestEpochOptions: {
       minEpochCount: BigInt(report.manifest.epoch),
       expectedManifestUri: report.manifestUri,

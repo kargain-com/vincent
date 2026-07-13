@@ -1,4 +1,4 @@
-import { createArweaveGetLeafWithUris } from '@kargain/vincent/arweave';
+import { createArweaveGetLeafWithUris, resolveVerifierLeafUris } from '@kargain/vincent/arweave';
 import { createDecoder } from '@kargain/vincent/decoder';
 import type { Manifest } from '@kargain/vincent/protocol';
 
@@ -36,6 +36,10 @@ export interface VerifyGenesisPublishOptions {
   epochNumber?: number;
   /** Checkpoint leafKey → ar://txId map for gateway-first decode. */
   leafUris?: Record<string, string>;
+  /** Published Kind=leaf-uris sidecar URI. */
+  leafUriSidecarUri?: string;
+  /** When true and leafUris omitted, discover sidecar via GraphQL (default true). */
+  discoverLeafUriSidecar?: boolean;
   waitForLatestEpochOptions?: WaitForLatestEpochOptions;
 }
 
@@ -216,6 +220,19 @@ export async function verifyGenesisPublish(
     failures.push('manifest hash bytes32 conversion');
   }
 
+  const resolvedLeafUris = await resolveVerifierLeafUris({
+    publisher: report.publisher.toLowerCase(),
+    epoch: epochNumber,
+    merkleRoot: report.manifest.dataset.merkleRoot,
+    jsonlSha256: report.manifest.dataset.jsonlSha256,
+    gatewayUrl: options.gatewayUrl,
+    graphqlUrl: options.graphqlUrl,
+    fetchImpl,
+    leafUris: options.leafUris,
+    leafUriSidecarUri: options.leafUriSidecarUri,
+    discoverLeafUriSidecar: options.discoverLeafUriSidecar,
+  });
+
   if (options.fixture === 'genesis-mini') {
     failures.push(
       ...(await verifyFixtureVins(
@@ -225,7 +242,7 @@ export async function verifyGenesisPublish(
         report.manifest.dataset.merkleRoot,
         epochNumber,
         fetchImpl,
-        options.leafUris,
+        resolvedLeafUris,
       )),
     );
   } else {
@@ -237,7 +254,7 @@ export async function verifyGenesisPublish(
         report.manifest.dataset.merkleRoot,
         epochNumber,
         fetchImpl,
-        options.leafUris,
+        resolvedLeafUris,
       )),
     );
   }

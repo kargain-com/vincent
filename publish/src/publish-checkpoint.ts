@@ -17,6 +17,8 @@ export interface PublishCheckpoint {
   failedLeafKeys: string[];
   /** leafKey -> ar://txId of the latest upload (gateway fallback). */
   leafUris: Record<string, string>;
+  /** ar:// URI of published Kind=leaf-uris bulk index (optional). */
+  leafUriSidecarUri?: string;
   jsonlUri?: string;
   manifestUri?: string;
   updatedAt: string;
@@ -138,6 +140,9 @@ function parseCheckpoint(value: unknown): PublishCheckpoint {
   };
   if (typeof record.jsonlUri === 'string') checkpoint.jsonlUri = record.jsonlUri;
   if (typeof record.manifestUri === 'string') checkpoint.manifestUri = record.manifestUri;
+  if (typeof record.leafUriSidecarUri === 'string') {
+    checkpoint.leafUriSidecarUri = record.leafUriSidecarUri;
+  }
   return checkpoint;
 }
 
@@ -270,14 +275,22 @@ export function loadOrCreateCheckpoint(
 
 export function updateCheckpointUris(
   checkpoint: PublishCheckpoint,
-  uris: { jsonlUri?: string; manifestUri?: string },
+  uris: { jsonlUri?: string; manifestUri?: string; leafUriSidecarUri?: string },
 ): PublishCheckpoint {
   return {
     ...checkpoint,
     jsonlUri: uris.jsonlUri ?? checkpoint.jsonlUri,
     manifestUri: uris.manifestUri ?? checkpoint.manifestUri,
+    leafUriSidecarUri: uris.leafUriSidecarUri ?? checkpoint.leafUriSidecarUri,
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function setLeafUriSidecarUri(
+  checkpoint: PublishCheckpoint,
+  uri: string,
+): PublishCheckpoint {
+  return updateCheckpointUris(checkpoint, { leafUriSidecarUri: uri });
 }
 
 export function needsLeafUriBackfillHint(checkpoint: PublishCheckpoint): boolean {

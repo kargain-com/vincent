@@ -19,9 +19,11 @@ import {
   loadOrCreateCheckpoint,
   needsLeafUriBackfillHint,
   saveCheckpoint,
+  setLeafUriSidecarUri,
   updateCheckpointUris,
   type PublishCheckpoint,
 } from './publish-checkpoint.js';
+import { publishLeafUriSidecarFromCheckpoint } from './leaf-uri-sidecar.js';
 import { resolveEpochParent, type EpochChainReader } from './resolve-epoch-parent.js';
 import { resolveUploadedArtifactUri } from './resolve-uploaded-artifact.js';
 import { manifestHash, signManifest } from './sign-manifest.js';
@@ -60,6 +62,12 @@ export interface LeafIndexCheckOptions {
   onLeafFailed?: VerifyUploadedLeavesOptions['onLeafFailed'];
 }
 
+export interface LeafUriSidecarOptions {
+  /** Upload Kind=leaf-uris bulk index after index-check (opt-in). */
+  publish?: boolean;
+  onWarning?: (message: string) => void;
+}
+
 export interface PublishEpochDeps {
   epoch: EpochBuild;
   signerKeyHex: string;
@@ -77,6 +85,7 @@ export interface PublishEpochDeps {
   onProgress?: (progress: PublishEpochProgress) => void;
   onCheckpointLoaded?: (summary: CheckpointLoadSummary) => void;
   onHint?: (message: string) => void;
+  leafUriSidecar?: LeafUriSidecarOptions;
 }
 
 export interface CheckpointLoadSummary {
@@ -415,6 +424,25 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
 
     if (result.failed.length > 0) {
       throw new Error(formatIndexCheckFailure(result.failed, deps.epoch.leaves.size));
+    }
+
+    if (
+      deps.leafUriSidecar?.publish === true &&
+      Object.keys(checkpoint.leafUris).length > 0
+    ) {
+      try {
+        const published = await publishLeafUriSidecarFromCheckpoint({
+          uploader: deps.uploader,
+          checkpoint,
+        });
+        checkpoint = setLeafUriSidecarUri(checkpoint, published.uri);
+        saveCheckpoint(checkpointPath, checkpoint);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        deps.leafUriSidecar.onWarning?.(
+          `Leaf uri sidecar upload failed (continuing): ${message}`,
+        );
+      }
     }
   }
 
