@@ -448,7 +448,10 @@ describe('verifyUploadedLeaves gateway fallback', () => {
 
     const uploader = createMockUploader();
     const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
-    const leafKey = sortedLeaves[0]![0];
+    const leafKey = sortedLeaves[0]?.[0];
+    if (leafKey === undefined) {
+      throw new Error('expected leaf key');
+    }
 
     const result = await verifyUploadedLeaves({
       epoch: built.value,

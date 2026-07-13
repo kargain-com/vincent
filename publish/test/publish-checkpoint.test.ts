@@ -14,6 +14,7 @@ import {
   needsLeafUriBackfillHint,
   saveCheckpoint,
   setLeafUri,
+  setLeafUriSidecarUri,
   validateCheckpointFingerprint,
   writeLeafUriBackfillHintIfNeeded,
 } from '../src/publish-checkpoint.js';
@@ -160,5 +161,16 @@ describe('publish checkpoint', () => {
       false,
     );
     expect(messages).toHaveLength(1);
+  });
+
+  it('round-trips optional leafUriSidecarUri', () => {
+    const path = testCheckpointPath();
+    const checkpoint = setLeafUriSidecarUri(
+      createEmptyCheckpoint(fingerprint),
+      'ar://tx-sidecar',
+    );
+    saveCheckpoint(path, checkpoint);
+    const loaded = loadOrCreateCheckpoint(path, fingerprint);
+    expect(loaded.leafUriSidecarUri).toBe('ar://tx-sidecar');
   });
 });

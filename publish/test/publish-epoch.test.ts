@@ -449,4 +449,181 @@ describe('publishEpoch offline mock e2e', () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain('backfill:leaf-uris');
   });
+
+  it('publishes leaf uri sidecar when opt-in after index-check', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const seedUploader = createMockUploader();
+    for (const [leafKey, entry] of sortedLeaves) {
+      await seedUploader.upload(
+        new TextEncoder().encode(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })),
+        [
+          { name: 'App', value: 'vincent' },
+          { name: 'Epoch', value: '1' },
+          { name: 'LeafKey', value: leafKey },
+        ],
+      );
+    }
+    const jsonlUpload = await seedUploader.upload(
+      new TextEncoder().encode('jsonl'),
+      [
+        { name: 'App', value: 'vincent' },
+        { name: 'Epoch', value: '1' },
+        { name: 'Type', value: 'jsonl' },
+      ],
+    );
+    const manifestUpload = await seedUploader.upload(
+      new TextEncoder().encode('{}'),
+      [
+        { name: 'App', value: 'vincent' },
+        { name: 'Epoch', value: '1' },
+        { name: 'Type', value: 'manifest' },
+      ],
+    );
+
+    const checkpointPath = testCheckpointPath();
+    let checkpoint = createEmptyCheckpoint({
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      merkleRoot: built.value.merkleRoot,
+      jsonlSha256: built.value.jsonlSha256,
+    });
+    const leafUris: Record<string, string> = {};
+    for (const [leafKey] of sortedLeaves) {
+      checkpoint = markLeafUploaded(checkpoint, leafKey);
+      checkpoint = markLeafIndexVerified(checkpoint, leafKey);
+      const record = seedUploader.records.find(
+        (entry) => entry.tags.find((tag) => tag.name === 'LeafKey')?.value === leafKey,
+      );
+      if (record !== undefined) {
+        leafUris[leafKey] = `ar://${record.id}`;
+      }
+    }
+    checkpoint = {
+      ...checkpoint,
+      jsonlUri: jsonlUpload.uri,
+      manifestUri: manifestUpload.uri,
+      leafUris,
+    };
+    saveCheckpoint(checkpointPath, checkpoint);
+
+    const gatewayItems = uploaderStoreToGatewayItems(seedUploader.records, TEST_PUBLISHER, 1);
+    const { gatewayUrl, graphqlUrl, fetchImpl } = createMockGateway(gatewayItems);
+
+    const uploader = createMockUploader();
+    const chainPublisher = createMockChainPublisher();
+
+    await publishEpoch({
+      epoch: built.value,
+      signerKeyHex: TEST_PRIVATE_KEY,
+      uploader,
+      chainPublisher,
+      checkpointPath,
+      phases: {
+        uploadLeaves: false,
+        uploadArtifacts: false,
+      },
+      leafIndexCheck: {
+        gatewayUrl,
+        graphqlUrl,
+        fetchImpl,
+        pollIntervalMs: 0,
+        sleep: async () => {},
+      },
+      leafUriSidecar: { publish: true },
+    });
+
+    const saved = loadCheckpoint(checkpointPath);
+    expect(saved?.leafUriSidecarUri).toMatch(/^ar:\/\//);
+    const sidecarUpload = uploader.records.find((record) =>
+      record.tags.some((tag) => tag.name === 'Kind' && tag.value === 'leaf-uris'),
+    );
+    expect(sidecarUpload).toBeDefined();
+  });
+
+  it('warns and continues when opt-in sidecar upload fails', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const seedUploader = createMockUploader();
+    for (const [leafKey, entry] of sortedLeaves) {
+      await seedUploader.upload(
+        new TextEncoder().encode(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })),
+        [
+          { name: 'App', value: 'vincent' },
+          { name: 'Epoch', value: '1' },
+          { name: 'LeafKey', value: leafKey },
+        ],
+      );
+    }
+
+    const checkpointPath = testCheckpointPath();
+    let checkpoint = createEmptyCheckpoint({
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      merkleRoot: built.value.merkleRoot,
+      jsonlSha256: built.value.jsonlSha256,
+    });
+    const leafUris: Record<string, string> = {};
+    for (const [leafKey] of sortedLeaves) {
+      checkpoint = markLeafUploaded(checkpoint, leafKey);
+      checkpoint = markLeafIndexVerified(checkpoint, leafKey);
+      const record = seedUploader.records.find(
+        (entry) => entry.tags.find((tag) => tag.name === 'LeafKey')?.value === leafKey,
+      );
+      if (record !== undefined) {
+        leafUris[leafKey] = `ar://${record.id}`;
+      }
+    }
+    checkpoint = {
+      ...checkpoint,
+      jsonlUri: 'ar://jsonl',
+      manifestUri: 'ar://manifest',
+      leafUris,
+    };
+    saveCheckpoint(checkpointPath, checkpoint);
+
+    const gatewayItems = uploaderStoreToGatewayItems(seedUploader.records, TEST_PUBLISHER, 1);
+    const { gatewayUrl, graphqlUrl, fetchImpl } = createMockGateway(gatewayItems);
+
+    const uploader = createMockUploader();
+    vi.spyOn(uploader, 'upload').mockRejectedValue(new Error('sidecar upload failed'));
+    const chainPublisher = createMockChainPublisher();
+    const warnings: string[] = [];
+
+    await publishEpoch({
+      epoch: built.value,
+      signerKeyHex: TEST_PRIVATE_KEY,
+      uploader,
+      chainPublisher,
+      checkpointPath,
+      phases: {
+        uploadLeaves: false,
+        uploadArtifacts: false,
+      },
+      leafIndexCheck: {
+        gatewayUrl,
+        graphqlUrl,
+        fetchImpl,
+        pollIntervalMs: 0,
+        sleep: async () => {},
+      },
+      leafUriSidecar: {
+        publish: true,
+        onWarning: (message) => warnings.push(message),
+      },
+    });
+
+    expect(warnings.some((message) => message.includes('sidecar upload failed'))).toBe(true);
+    expect(loadCheckpoint(checkpointPath)?.leafUriSidecarUri).toBeUndefined();
+  });
 });

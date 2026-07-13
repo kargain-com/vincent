@@ -161,7 +161,11 @@ describe('createArweaveGetLeafWithUris', () => {
       leafUris,
     });
 
-    const payload = await getLeaf(firstKey!);
+    if (firstKey === undefined) {
+      throw new Error('expected leaf key');
+    }
+
+    const payload = await getLeaf(firstKey);
     expect(payload.leaf).toBeTruthy();
   });
 });

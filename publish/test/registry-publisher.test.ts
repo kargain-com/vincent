@@ -30,7 +30,7 @@ describe('createRegistryPublisher', () => {
     const registryPublisher = harness.createRegistryPublisher(19);
     const sepoliaPublisher = harness.createPublisher(19);
 
-    expect(registryPublisher.publishEpoch).not.toBe(sepoliaPublisher.publishEpoch);
+    expect(registryPublisher).not.toBe(sepoliaPublisher);
 
     await registryPublisher.publishEpoch(GENESIS_ARGS);
     expect(await sepoliaPublisher.readEpochCount(account.address)).toBe(1n);

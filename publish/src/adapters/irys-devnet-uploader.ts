@@ -1,5 +1,5 @@
 import { BASE_SEPOLIA_CHAIN_ID } from '../constants.js';
-import { createIrysUploader, type IrysUploaderOptions } from './irys-uploader.js';
+import { createIrysUploader } from './irys-uploader.js';
 import type { Uploader as VincentUploader } from './types.js';
 
 export interface IrysDevnetUploaderOptions {

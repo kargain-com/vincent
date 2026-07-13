@@ -11,6 +11,7 @@ import { getLocalChainHarness } from './local-chain-harness.js';
 import { createMockIrysGateway } from './mock-irys-gateway.js';
 import { createMockUploader } from './mock-uploader.js';
 import { mockPreflightOverrides } from './simulate-genesis-publish.js';
+import { testCheckpointPath } from './helpers.js';
 
 test(
   'full seed publishes locally and decodes all 20 committed VIN fixtures',
@@ -34,6 +35,7 @@ test(
       signerKeyHex: account.privateKeyHex,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
       preflight: mockPreflightOverrides(),
     });
 

@@ -5,6 +5,7 @@ import * as chainModule from '../src/adapters/base-sepolia-publisher.js';
 import * as checkpointModule from '../src/publish-checkpoint.js';
 import * as constantsModule from '../src/constants.js';
 import * as registryModule from '../src/adapters/registry-publisher.js';
+import * as leafUriSidecarModule from '../src/leaf-uri-sidecar.js';
 import * as publishEntry from '../src/index.js';
 import * as verifyGenesisModule from '../src/verify-genesis-publish.js';
 import * as verifyLeavesModule from '../src/verify-uploaded-leaves.js';
@@ -58,5 +59,21 @@ describe('publish entry re-exports', () => {
     expect(typeof publishEntry.createIrysUploader).toBe('function');
     expect(typeof publishEntry.createIrysClient).toBe('function');
     expect(typeof publishEntry.resolvePublishNetwork).toBe('function');
+  });
+
+  it('exposes leaf uri sidecar helpers from the package root', () => {
+    expect(typeof publishEntry.buildLeafUriSidecar).toBe('function');
+    expect(typeof publishEntry.uploadLeafUriSidecar).toBe('function');
+    expect(typeof publishEntry.publishLeafUriSidecarFromCheckpoint).toBe('function');
+    expect(typeof publishEntry.resolveVerifierLeafUris).toBe('function');
+    expect(publishEntry.buildLeafUriSidecar).toBe(leafUriSidecarModule.buildLeafUriSidecar);
+    expect(publishEntry.uploadLeafUriSidecar).toBe(leafUriSidecarModule.uploadLeafUriSidecar);
+    expect(publishEntry.buildLeafUriSidecarFromCheckpoint).toBe(
+      leafUriSidecarModule.buildLeafUriSidecarFromCheckpoint,
+    );
+    expect(publishEntry.leafUriSidecarFingerprintFromCheckpoint).toBe(
+      leafUriSidecarModule.leafUriSidecarFingerprintFromCheckpoint,
+    );
+    expect(publishEntry.setLeafUriSidecarUri).toBe(checkpointModule.setLeafUriSidecarUri);
   });
 });

@@ -16,14 +16,32 @@ function graphqlResponse(body: unknown): Response {
   });
 }
 
+function graphqlRequestQuery(init?: RequestInit): string {
+  const body = init?.body;
+  if (typeof body !== 'string') {
+    throw new Error('expected string graphql body');
+  }
+  return (JSON.parse(body) as { query: string }).query;
+}
+
+function fetchInputUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
+}
+
 describe('backfillLeafUrisFromGraphql', () => {
   it('paginates owner+epoch queries and maps LeafKey tags to ar uris', async () => {
     let page = 0;
     const fetchImpl: typeof fetch = async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as { query: string };
-      expect(payload.query).toContain('owners:');
-      expect(payload.query).toContain('"Epoch"');
-      expect(payload.query).not.toContain('LeafKey');
+      const query = graphqlRequestQuery(init);
+      expect(query).toContain('owners:');
+      expect(query).toContain('"Epoch"');
+      expect(query).not.toContain('LeafKey');
       page += 1;
       if (page === 1) {
         return graphqlResponse({

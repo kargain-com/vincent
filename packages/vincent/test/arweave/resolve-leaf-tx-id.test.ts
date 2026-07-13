@@ -8,11 +8,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function graphqlRequestQuery(init?: RequestInit): string {
+  const body = init?.body;
+  if (typeof body !== 'string') {
+    throw new Error('expected string graphql body');
+  }
+  return (JSON.parse(body) as { query: string }).query;
+}
+
 describe('resolveLeafTxId', () => {
   it('returns the newest tx id for a tagged leaf', async () => {
     const fetchImpl: typeof fetch = async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as { query: string };
-      expect(payload.query).toContain('LeafKey');
+      const query = graphqlRequestQuery(init);
+      expect(query).toContain('LeafKey');
       return new Response(
         JSON.stringify({ data: { transactions: { edges: [{ node: { id: 'mock-tx-1' } }] } } }),
         { status: 200 },
@@ -51,8 +59,8 @@ describe('resolveLeafTxId', () => {
   it('lowercases checksummed publisher in owners filter', async () => {
     let capturedQuery = '';
     const fetchImpl: typeof fetch = async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as { query: string };
-      capturedQuery = payload.query;
+      const query = graphqlRequestQuery(init);
+      capturedQuery = query;
       return new Response(
         JSON.stringify({ data: { transactions: { edges: [{ node: { id: 'mock-tx-1' } }] } } }),
         { status: 200 },

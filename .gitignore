@@ -18,3 +18,4 @@ contracts/coverage/
 # Publish resume checkpoint (local state only)
 publish/.vincent-publish-checkpoint.json
 publish/.vincent-publish-checkpoint.json.tmp
+publish/leaf-uris-epoch-*.json
