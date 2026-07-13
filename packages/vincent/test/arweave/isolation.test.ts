@@ -30,23 +30,25 @@ describe('arweave isolation', () => {
       const content = readFileSync(file, 'utf8');
       expect(content).not.toMatch(/@noble\//);
       expect(content).not.toMatch(/protocol\//);
+      const fileName = file.split('/').pop() ?? '';
       for (const line of importLines(content)) {
-        // Any cross-module import (e.g. decoder types) must be type-only and erased.
+        // Cross-module decoder imports must be type-only, except verifyLeaf in gateway verify.
         if (/decoder\//.test(line)) {
-          expect(line.trimStart().startsWith('import type')).toBe(true);
+          const allowedRuntimeDecoder =
+            fileName === 'fetch-leaf-from-gateway.ts' && line.includes("from '../decoder/verify-leaf.js'");
+          if (!allowedRuntimeDecoder) {
+            expect(line.trimStart().startsWith('import type')).toBe(true);
+          }
         }
       }
     }
   });
 
-  it('keeps built arweave entry free of non-fetch dependencies', () => {
-    const entryJs = readFileSync(join(distRoot, 'arweave-export.js'), 'utf8');
+  it('keeps createArweaveGetLeaf built entry free of non-fetch dependencies', () => {
     const implJs = readFileSync(join(distRoot, 'arweave', 'create-arweave-get-leaf.js'), 'utf8');
-    for (const js of [entryJs, implJs]) {
-      expect(js).not.toMatch(/@noble/);
-      expect(js).not.toMatch(/protocol\//);
-      expect(js).not.toMatch(/decoder\//);
-      expect(js).not.toMatch(/from 'node:/);
-    }
+    expect(implJs).not.toMatch(/@noble/);
+    expect(implJs).not.toMatch(/protocol\//);
+    expect(implJs).not.toMatch(/decoder\//);
+    expect(implJs).not.toMatch(/from 'node:/);
   });
 });

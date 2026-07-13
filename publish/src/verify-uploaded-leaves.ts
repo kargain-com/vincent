@@ -195,7 +195,7 @@ async function resolveAndVerifyFromGraphql(
   const txId = await resolveLeafTxId({
     graphqlUrl: options.graphqlUrl,
     publisher: options.publisher,
-    epochNumber: options.epochNumber,
+    epoch: options.epochNumber,
     leafKey,
     fetchImpl: options.fetchImpl,
   });

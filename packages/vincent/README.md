@@ -118,7 +118,13 @@ Reference `getLeaf` via ANS-104 GraphQL tag queries (`App=vincent`, `Epoch`, `Le
 
 | Export | Description |
 |--------|-------------|
-| `createArweaveGetLeaf({ gatewayUrl, graphqlUrl?, publisher, epoch, fetchImpl? })` | Returns `getLeaf(leafKey)` |
+| `createArweaveGetLeaf({ gatewayUrl, graphqlUrl?, publisher, epoch, fetchImpl? })` | Returns `getLeaf(leafKey)` via GraphQL tag query + gateway fetch |
+| `createArweaveGetLeafWithUris({ ...createArweaveGetLeaf options, leafUris? })` | Gateway-first `getLeaf`: known `ar://` tx id → gateway; else GraphQL |
+| `resolveLeafTxId({ graphqlUrl, publisher, epoch, leafKey, fetchImpl? })` | One-shot newest tx id for a LeafKey tag (no polling) |
+| `backfillLeafUrisFromGraphql({ graphqlUrl, publisher, epoch, ... })` | Bulk paginate owner+epoch tags → `leafKey → ar://txId` |
+| `leafTxIdToUri(txId)` | Normalize tx id to `ar://` URI |
+| `fetchLeafFromGateway(gatewayUrl, txIdOrUri, fetchImpl?)` | Direct gateway fetch by tx id (no GraphQL; does not verify Merkle) |
+| `verifyLeafFromGateway({ gatewayUrl, txIdOrUri, merkleRoot, fetchImpl? })` | Gateway fetch + Merkle proof check against epoch root |
 | `LeafNotFoundError` | No matching tagged transaction |
 
 Does not verify Merkle inclusion — `createDecoder` does.

@@ -34,7 +34,7 @@ describe('resolveLeafTxId', () => {
     const txId = await resolveLeafTxId({
       graphqlUrl: live.graphqlUrl,
       publisher: TEST_PUBLISHER,
-      epochNumber: 1,
+      epoch: 1,
       leafKey,
       fetchImpl: live.fetchImpl,
     });
@@ -52,7 +52,7 @@ describe('resolveLeafTxId', () => {
     const txId = await resolveLeafTxId({
       graphqlUrl: 'https://mock.uploader.irys.test/graphql',
       publisher: TEST_PUBLISHER,
-      epochNumber: 1,
+      epoch: 1,
       leafKey: '1FA',
       fetchImpl,
     });

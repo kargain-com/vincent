@@ -80,7 +80,7 @@ describe('backfillLeafUrisFromGraphql', () => {
     const result = await backfillLeafUrisFromGraphql({
       graphqlUrl: GRAPHQL_URL,
       publisher: TEST_PUBLISHER,
-      epochNumber: 2,
+      epoch: 2,
       fetchImpl,
       pageSize: 2,
     });

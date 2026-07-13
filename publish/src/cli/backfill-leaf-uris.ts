@@ -104,7 +104,7 @@ async function main(): Promise<void> {
   const result = await backfillLeafUrisFromGraphql({
     graphqlUrl,
     publisher,
-    epochNumber,
+    epoch: epochNumber,
     onProgress: (progress) => {
       process.stdout.write(
         `GraphQL page ${String(progress.pagesFetched)}: ` +

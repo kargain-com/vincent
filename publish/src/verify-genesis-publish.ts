@@ -1,5 +1,5 @@
-import { createArweaveGetLeaf } from '@kargain/vincent/arweave';
-import { createDecoder, type GetLeaf } from '@kargain/vincent/decoder';
+import { createArweaveGetLeafWithUris } from '@kargain/vincent/arweave';
+import { createDecoder } from '@kargain/vincent/decoder';
 import type { Manifest } from '@kargain/vincent/protocol';
 
 import type {
@@ -15,7 +15,6 @@ import {
   VIN_FUEL,
   VIN_PLANT,
 } from './cli/genesis-mini-vins.js';
-import { fetchLeafFromGateway } from './fetch-leaf-from-gateway.js';
 import { loadSeedFixtureCases } from './seed-fixtures.js';
 import { manifestHash, verifySignedManifest } from './sign-manifest.js';
 
@@ -65,36 +64,6 @@ async function fetchManifest(
   return (await response.json()) as Manifest;
 }
 
-function createGetLeafWithUriFallback(options: {
-  gatewayUrl: string;
-  graphqlUrl: string;
-  publisher: string;
-  epochNumber: number;
-  fetchImpl?: typeof fetch;
-  leafUris?: Record<string, string>;
-}): GetLeaf {
-  const graphqlGetLeaf = createArweaveGetLeaf({
-    gatewayUrl: options.gatewayUrl,
-    graphqlUrl: options.graphqlUrl,
-    publisher: options.publisher,
-    epoch: options.epochNumber,
-    fetchImpl: options.fetchImpl,
-  });
-  const uris = options.leafUris ?? {};
-
-  return async (leafKey: string) => {
-    const uri = uris[leafKey];
-    if (uri !== undefined) {
-      try {
-        return await fetchLeafFromGateway(options.gatewayUrl, uri, options.fetchImpl);
-      } catch {
-        // Fall back to GraphQL tag query.
-      }
-    }
-    return graphqlGetLeaf(leafKey);
-  };
-}
-
 async function verifyFixtureVins(
   gatewayUrl: string,
   graphqlUrl: string,
@@ -105,11 +74,11 @@ async function verifyFixtureVins(
   leafUris?: Record<string, string>,
 ): Promise<string[]> {
   const failures: string[] = [];
-  const getLeaf = createGetLeafWithUriFallback({
+  const getLeaf = createArweaveGetLeafWithUris({
     gatewayUrl,
     graphqlUrl,
     publisher,
-    epochNumber,
+    epoch: epochNumber,
     fetchImpl,
     leafUris,
   });
@@ -155,11 +124,11 @@ async function verifySeedFixtureVins(
   fetchImpl: typeof fetch,
   leafUris?: Record<string, string>,
 ): Promise<string[]> {
-  const getLeaf = createGetLeafWithUriFallback({
+  const getLeaf = createArweaveGetLeafWithUris({
     gatewayUrl,
     graphqlUrl,
     publisher,
-    epochNumber,
+    epoch: epochNumber,
     fetchImpl,
     leafUris,
   });

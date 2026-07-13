@@ -190,7 +190,7 @@ describe('createArweaveGetLeaf', () => {
       fetchImpl,
     });
 
-    await expect(getLeaf('1FA')).rejects.toThrow('leaf data fetch failed: 404');
+    await expect(getLeaf('1FA')).rejects.toThrow('Gateway returned 404');
   });
 
   it('rejects invalid leaf payload shape', async () => {
@@ -403,5 +403,28 @@ describe('createArweaveGetLeaf', () => {
     await expect(getLeaf('1FA')).rejects.toThrow(
       'graphql query failed: Query execution timed out',
     );
+  });
+
+  it('resolves leaves when publisher is checksummed', async () => {
+    const { gatewayUrl, fetchImpl } = createMockGateway([
+      {
+        owner: PUBLISHER.toLowerCase(),
+        epoch: 1,
+        leafKey: '1FA',
+        txId: 'tx-checksum',
+        height: 1,
+        data: { leaf: LEAF, proof: PROOF },
+      },
+    ]);
+
+    const getLeaf = createArweaveGetLeaf({
+      gatewayUrl,
+      publisher: PUBLISHER,
+      epoch: 1,
+      fetchImpl,
+    });
+
+    const payload = await getLeaf('1FA');
+    expect(payload.leaf).toBe(LEAF);
   });
 });

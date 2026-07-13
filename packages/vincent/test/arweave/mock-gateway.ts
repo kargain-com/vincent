@@ -9,6 +9,12 @@ export interface MockGatewayItem {
   data: { leaf: string; proof: MerkleProof };
 }
 
+export interface MockGatewayOptions {
+  gatewayUrl?: string;
+  graphqlUrl?: string;
+  staticBodies?: Record<string, string>;
+}
+
 export function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') {
     return input;
@@ -37,18 +43,24 @@ function extractEpoch(query: string): number | null {
   return Number.parseInt(match[1], 10);
 }
 
-export function createMockGateway(items: MockGatewayItem[]): {
+export function createMockGateway(
+  items: MockGatewayItem[],
+  options?: MockGatewayOptions,
+): {
   gatewayUrl: string;
+  graphqlUrl: string;
   fetchImpl: typeof fetch;
 } {
-  const gatewayUrl = 'https://mock.arweave.test';
+  const gatewayUrl = options?.gatewayUrl ?? 'https://mock.arweave.test';
+  const graphqlUrl = options?.graphqlUrl ?? `${gatewayUrl}/graphql`;
+  const staticBodies = options?.staticBodies ?? {};
   const byTxId = new Map(items.map((item) => [item.txId, item]));
 
   const fetchImpl: typeof fetch = (input, init) => {
     const url = requestUrl(input);
     const body = typeof init?.body === 'string' ? init.body : '';
 
-    if (url === `${gatewayUrl}/graphql` && init?.method === 'POST') {
+    if (url === graphqlUrl && init?.method === 'POST') {
       const parsed = JSON.parse(body) as { query?: string };
       const query = parsed.query ?? '';
       const owner = extractOwner(query);
@@ -61,7 +73,9 @@ export function createMockGateway(items: MockGatewayItem[]): {
           : items
               .filter(
                 (item) =>
-                  item.owner === owner && item.epoch === epoch && item.leafKey === leafKey,
+                  item.owner.toLowerCase() === owner.toLowerCase() &&
+                  item.epoch === epoch &&
+                  item.leafKey === leafKey,
               )
               .sort((a, b) => b.height - a.height);
 
@@ -74,7 +88,17 @@ export function createMockGateway(items: MockGatewayItem[]): {
       );
     }
 
-    const txId = url.slice(`${gatewayUrl}/`.length);
+    const txId = url.slice(`${gatewayUrl.replace(/\/+$/, '')}/`.length);
+    const staticBody = staticBodies[txId];
+    if (staticBody !== undefined) {
+      return Promise.resolve(
+        new Response(staticBody, {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    }
+
     const item = byTxId.get(txId);
     if (item === undefined) {
       return Promise.resolve(new Response('not found', { status: 404 }));
@@ -88,5 +112,5 @@ export function createMockGateway(items: MockGatewayItem[]): {
     );
   };
 
-  return { gatewayUrl, fetchImpl };
+  return { gatewayUrl, graphqlUrl, fetchImpl };
 }
