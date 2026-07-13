@@ -279,3 +279,32 @@ export function updateCheckpointUris(
     updatedAt: new Date().toISOString(),
   };
 }
+
+export function needsLeafUriBackfillHint(checkpoint: PublishCheckpoint): boolean {
+  return (
+    checkpoint.indexVerifiedLeafKeys.length > 0 && Object.keys(checkpoint.leafUris).length === 0
+  );
+}
+
+export function formatLeafUriBackfillHint(checkpoint: PublishCheckpoint): string {
+  const count = checkpoint.indexVerifiedLeafKeys.length;
+  const epoch = checkpoint.epochNumber;
+  return (
+    `Checkpoint has ${String(count)} index-verified leaves but no leafUris ` +
+    `(v1 migration or missing backfill). Run: ` +
+    `pnpm --filter @kargain/vincent-publish backfill:leaf-uris -- --devnet --epoch ${String(epoch)}`
+  );
+}
+
+export function writeLeafUriBackfillHintIfNeeded(
+  checkpoint: PublishCheckpoint,
+  write: (message: string) => void = (message) => {
+    process.stderr.write(`${message}\n`);
+  },
+): boolean {
+  if (!needsLeafUriBackfillHint(checkpoint)) {
+    return false;
+  }
+  write(formatLeafUriBackfillHint(checkpoint));
+  return true;
+}

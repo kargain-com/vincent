@@ -6,13 +6,16 @@ import { TEST_PUBLISHER } from '../src/constants.js';
 import {
   clearLeafFailed,
   createEmptyCheckpoint,
+  formatLeafUriBackfillHint,
   loadOrCreateCheckpoint,
   markLeafFailed,
   markLeafIndexVerified,
   markLeafUploaded,
+  needsLeafUriBackfillHint,
   saveCheckpoint,
   setLeafUri,
   validateCheckpointFingerprint,
+  writeLeafUriBackfillHintIfNeeded,
 } from '../src/publish-checkpoint.js';
 import { testCheckpointPath } from './helpers.js';
 
@@ -70,6 +73,7 @@ describe('publish checkpoint', () => {
     expect(loaded.uploadedLeafKeys).toEqual([]);
     expect(loaded.failedLeafKeys).toEqual([]);
     expect(loaded.leafUris).toEqual({});
+    expect(needsLeafUriBackfillHint(loaded)).toBe(true);
     expect(loaded.jsonlUri).toBe('ar://jsonl');
     expect(loaded.manifestUri).toBe('ar://manifest');
 
@@ -126,5 +130,35 @@ describe('publish checkpoint', () => {
         merkleRoot: 'sha256:' + 'c'.repeat(64),
       }),
     ).toThrow(/merkleRoot\/jsonlSha256 mismatch/);
+  });
+
+  it('detects when leafUri backfill is recommended', () => {
+    const migrated = loadOrCreateCheckpoint(testCheckpointPath(), fingerprint);
+    let checkpoint = markLeafIndexVerified(migrated, '1FA');
+    checkpoint = markLeafIndexVerified(checkpoint, '2GB');
+
+    expect(needsLeafUriBackfillHint(checkpoint)).toBe(true);
+    expect(formatLeafUriBackfillHint(checkpoint)).toContain('backfill:leaf-uris');
+    expect(formatLeafUriBackfillHint(checkpoint)).toContain('--epoch 2');
+
+    checkpoint = markLeafUploaded(checkpoint, '1FA', 'ar://tx-1FA');
+    expect(needsLeafUriBackfillHint(checkpoint)).toBe(false);
+  });
+
+  it('writes the backfill hint to stderr when needed', () => {
+    let checkpoint = markLeafIndexVerified(createEmptyCheckpoint(fingerprint), '1FA');
+    const messages: string[] = [];
+
+    expect(writeLeafUriBackfillHintIfNeeded(checkpoint, (message) => messages.push(message))).toBe(
+      true,
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('backfill:leaf-uris');
+
+    checkpoint = markLeafUploaded(checkpoint, '1FA', 'ar://tx-1FA');
+    expect(writeLeafUriBackfillHintIfNeeded(checkpoint, (message) => messages.push(message))).toBe(
+      false,
+    );
+    expect(messages).toHaveLength(1);
   });
 });

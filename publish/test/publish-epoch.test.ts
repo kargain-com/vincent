@@ -393,4 +393,60 @@ describe('publishEpoch offline mock e2e', () => {
 
     expect(uploadSpy).not.toHaveBeenCalled();
   });
+
+  it('reports missing leafUris on checkpoint load and emits a backfill hint', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const checkpointPath = testCheckpointPath();
+    let checkpoint = createEmptyCheckpoint({
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      merkleRoot: built.value.merkleRoot,
+      jsonlSha256: built.value.jsonlSha256,
+    });
+    for (const leafKey of built.value.leaves.keys()) {
+      checkpoint = markLeafIndexVerified(checkpoint, leafKey);
+    }
+    saveCheckpoint(checkpointPath, checkpoint);
+
+    const hints: string[] = [];
+    let summary:
+      | {
+          needsLeafUriBackfill: boolean;
+          indexVerifiedLeaves: number;
+        }
+      | undefined;
+
+    const uploader = createMockUploader();
+    const chainPublisher = createMockChainPublisher();
+
+    await publishEpoch({
+      epoch: built.value,
+      signerKeyHex: TEST_PRIVATE_KEY,
+      uploader,
+      chainPublisher,
+      checkpointPath,
+      phases: {
+        uploadLeaves: false,
+        uploadArtifacts: false,
+        indexCheck: false,
+        anchor: false,
+      },
+      onCheckpointLoaded: (value) => {
+        summary = value;
+      },
+      onHint: (message) => {
+        hints.push(message);
+      },
+    });
+
+    expect(summary?.needsLeafUriBackfill).toBe(true);
+    expect(summary?.indexVerifiedLeaves).toBe(built.value.leaves.size);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain('backfill:leaf-uris');
+  });
 });

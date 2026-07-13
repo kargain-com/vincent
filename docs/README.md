@@ -32,7 +32,7 @@ See the [package README](../packages/vincent/README.md) for quick start, full de
 |---------|--------|
 | `@kargain/vincent-compiler` | [compiler/README.md](../compiler/README.md) |
 | `@kargain/vincent-pipeline` | [pipeline/README.md](../pipeline/README.md) |
-| `@kargain/vincent-publish` | [publish/README.md](../publish/README.md) |
+| `@kargain/vincent-publish` | [publish/README.md](../publish/README.md) — [mainnet readiness](../publish/docs/MAINNET_READINESS.md) |
 | `@kargain/vincent-contracts` | [contracts/README.md](../contracts/README.md) |
 
 Release process: [RELEASING.md](../RELEASING.md).

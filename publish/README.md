@@ -40,6 +40,34 @@ import {
 
 Signing, hashing, and canonicalization reuse `@kargain/vincent/protocol` (EIP-191 + JCS).
 
+## Programmatic automation (Kargain)
+
+Checkpoint resume, index verification, backfill, and Base Sepolia chain adapters are
+exported from the package root for automation without reaching into CLI internals:
+
+```typescript
+import {
+  publishEpoch,
+  createBaseSepoliaPublisher,
+  loadOrCreateCheckpoint,
+  backfillLeafUrisFromGraphql,
+  verifyUploadedLeaves,
+  verifyGenesisPublish,
+} from '@kargain/vincent-publish';
+import type {
+  PublishCheckpoint,
+  VerifyGenesisPublishOptions,
+  VerifyUploadedLeavesOptions,
+} from '@kargain/vincent-publish';
+```
+
+Low-level Arweave primitives (`resolveLeafTxId`, `createArweaveGetLeafWithUris`,
+`fetchLeafFromGateway`) live on `@kargain/vincent/arweave` — use those for decoder
+clients; use `verifyGenesisPublish` + checkpoint `leafUris` for post-anchor publish
+verification.
+
+For Base mainnet (or any viem `Chain`), use `createRegistryPublisher({ chain: base, rpcUrl, privateKeyHex })` from `@kargain/vincent-publish` (`base` from `viem/chains`). `createBaseSepoliaPublisher` remains a Base Sepolia default wrapper for testnet CLI flows.
+
 ## Leaf discovery (A-2b) — `@kargain/vincent/arweave`
 
 The reference ANS-104 tag-query helper ships from the public `@kargain/vincent`
@@ -66,7 +94,8 @@ const anchored = await reader.getLatestEpoch(publisher);
 // anchored.merkleRoot → createDecoder({ merkleRoot, getLeaf: createArweaveGetLeaf(...) })
 ```
 
-The verify-only CLI uses an internal read-only adapter; integrators should use `@kargain/vincent/anchor` directly.
+The verify-only CLI uses `createBaseSepoliaReader` from this package (also exported
+from the root); other consumers may use `@kargain/vincent/anchor` directly.
 
 ## Epoch publish orchestration
 
@@ -128,6 +157,8 @@ Env vars:
 | `IRYS_GRAPHQL_URL` | Optional tag-query endpoint; defaults to `https://uploader.irys.xyz/graphql` |
 | `VINCENT_IRYS_RECOVER_FUND_TX` | Optional Base Sepolia fund tx hash to register with Irys without sending a new payment |
 
+Commented Base mainnet vars (`BASE_MAINNET_RPC_URL`, mainnet gateway/bundler notes) are in [`.env.example`](.env.example) — scaffold only; the CLI still requires `--devnet`.
+
 Irys uses three different endpoints:
 
 - **Base Sepolia RPC** (`BASE_SEPOLIA_RPC_URL`) — pays for uploads via Irys `base-eth` on `devnet.irys.xyz`
@@ -136,7 +167,7 @@ Irys uses three different endpoints:
 
 Registry: `0x06667DB3795C70F34b7517D1Af1217D3167BE241` on Base Sepolia (84532).
 
-**Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step.
+**Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step. See [docs/MAINNET_READINESS.md](docs/MAINNET_READINESS.md) for the P0/P1/P2 checklist and dual-network status.
 
 Before uploading, the CLI compiles claims, quotes the full Irys upload cost (every leaf +
 JSONL + manifest via `estimateFolderPrice`), funds the Irys account from **Base Sepolia**
@@ -176,7 +207,7 @@ The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves in 
 | `failedLeafKeys` | Leaves that failed the last index-check — input for `--retry-failed` |
 | `leafUris` | `leafKey → ar://txId` of the latest upload — used by the gateway fallback |
 
-The fingerprint is `publisher + epochNumber + merkleRoot + jsonlSha256`; delete the file when switching builds or publishers. Old v1 checkpoints are migrated automatically (their `completedLeafKeys` become `indexVerifiedLeafKeys`).
+The fingerprint is `publisher + epochNumber + merkleRoot + jsonlSha256`; delete the file when switching builds or publishers. Old v1 checkpoints are migrated automatically (their `completedLeafKeys` become `indexVerifiedLeafKeys`). The CLI warns on stderr when index-verified leaves exist but `leafUris` is empty — run `backfill:leaf-uris` before `--anchor-only` or `--verify-only`.
 
 **Index-check is non-fail-fast with gateway-first verification.** Both full publish and `--anchor-only` use the same per-leaf path: checkpoint `leafUris` → one-shot GraphQL tx-id lookup → re-upload + immediate gateway Merkle check → short last-resort GraphQL poll (**5s**). The long **120s** GraphQL poll per leaf is no longer the primary path. Before index-check on a fresh full upload, the CLI still waits **3 minutes** (bundler catch-up). Re-upload attempts are capped at **2** per leaf. Post-publish live verification waits until on-chain `latestEpoch.manifestUri` matches the report (fixes incremental epoch race).
 

@@ -28,8 +28,17 @@ export const REGISTRY_ADDRESS = '0x06667DB3795C70F34b7517D1Af1217D3167BE241' as 
 
 export const BASE_SEPOLIA_CHAIN_ID = 84532;
 
+/** Base mainnet chain ID (Kargain-aligned). */
+export const BASE_MAINNET_CHAIN_ID = 8453;
+
 /** Irys devnet bundler for Base Sepolia testnet uploads. */
 export const IRYS_DEVNET_BUNDLER_URL = 'https://devnet.irys.xyz';
+
+/** Irys mainnet bundler for Base mainnet uploads (Kargain: node2.irys.xyz). */
+export const IRYS_MAINNET_BUNDLER_URL = 'https://node2.irys.xyz';
+
+/** Chains that use {@link IRYS_MAINNET_BUNDLER_URL} (matches Kargain irysNodeUrl). */
+export const IRYS_MAINNET_CHAIN_IDS = [1, BASE_MAINNET_CHAIN_ID] as const;
 
 /** Irys fund() gas multiplier for congested testnets (matches Kargain). */
 export const IRYS_FUND_FEE_MULTIPLIER = 1.2;
@@ -74,3 +83,20 @@ export const DEFAULT_POST_REUPLOAD_DELAY_MS = 60_000;
 
 /** Post-re-upload pause for --anchor-only (gateway verifies immediately after re-upload). */
 export const DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS = 0;
+
+// Bundler URL policy aligned with Kargain lib/storage/irys-client.ts (irysNodeUrl).
+
+export function isBaseMainnetChainId(chainId: number): boolean {
+  return chainId === BASE_MAINNET_CHAIN_ID;
+}
+
+export function isIrysMainnetChain(chainId: number): boolean {
+  return (IRYS_MAINNET_CHAIN_IDS as readonly number[]).includes(chainId);
+}
+
+/** Resolve Irys bundler URL for supported Base chains (8453 / 84532). */
+export function resolveIrysBundlerUrl(chainId: number): string {
+  if (isIrysMainnetChain(chainId)) return IRYS_MAINNET_BUNDLER_URL;
+  if (chainId === BASE_SEPOLIA_CHAIN_ID) return IRYS_DEVNET_BUNDLER_URL;
+  throw new Error(`Unsupported chain for Irys bundler: ${chainId}`);
+}

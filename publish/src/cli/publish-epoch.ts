@@ -35,6 +35,7 @@ import {
   loadCheckpoint,
   loadOrCreateCheckpoint,
   uploadedLeafKeySet,
+  writeLeafUriBackfillHintIfNeeded,
 } from '../publish-checkpoint.js';
 import { publishEpoch, type PublishEpochProgress } from '../publish-epoch.js';
 import {
@@ -55,6 +56,10 @@ const PUBLISH_ROOT = join(__dirname, '../..');
 const REPO_ROOT = join(__dirname, '../../..');
 
 loadEnv({ path: join(PUBLISH_ROOT, '.env') });
+
+function writeCliHint(message: string): void {
+  process.stderr.write(`${message}\n`);
+}
 
 interface CliOptions {
   devnet: boolean;
@@ -311,6 +316,11 @@ async function runVerifyOnly(options: CliOptions): Promise<void> {
     leafCount: 0,
     manifest,
   };
+
+  const checkpoint = loadCheckpoint(options.checkpointFile);
+  if (checkpoint !== null) {
+    writeLeafUriBackfillHintIfNeeded(checkpoint, writeCliHint);
+  }
 
   let ok = true;
   const verification = await verifyGenesisPublish({
@@ -574,6 +584,7 @@ async function runPublish(options: CliOptions): Promise<void> {
     chainPublisher,
     requireGenesis: options.genesis ? true : undefined,
     checkpointPath: options.checkpointFile,
+    onHint: writeCliHint,
     uploadScope: options.retryFailed ? 'failed-only' : 'all',
     uploadConcurrency:
       options.uploadConcurrency ?? (options.fixture === 'full' ? DEFAULT_FULL_UPLOAD_CONCURRENCY : 1),

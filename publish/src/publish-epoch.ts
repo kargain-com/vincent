@@ -15,7 +15,9 @@ import {
   type EpochPreflightOptions,
 } from './preflight-genesis-publish.js';
 import {
+  formatLeafUriBackfillHint,
   loadOrCreateCheckpoint,
+  needsLeafUriBackfillHint,
   saveCheckpoint,
   updateCheckpointUris,
   type PublishCheckpoint,
@@ -73,6 +75,7 @@ export interface PublishEpochDeps {
   checkpointPath?: string;
   onProgress?: (progress: PublishEpochProgress) => void;
   onCheckpointLoaded?: (summary: CheckpointLoadSummary) => void;
+  onHint?: (message: string) => void;
 }
 
 export interface CheckpointLoadSummary {
@@ -81,6 +84,7 @@ export interface CheckpointLoadSummary {
   uploadedLeaves: number;
   indexVerifiedLeaves: number;
   failedLeaves: number;
+  needsLeafUriBackfill: boolean;
 }
 
 export type PublishEpochReport = PublishGenesisReport;
@@ -264,13 +268,18 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
 
   let checkpoint = loadOrCreateCheckpoint(checkpointPath, fingerprint);
   const totalLeaves = deps.epoch.leaves.size;
+  const needsLeafUriBackfill = needsLeafUriBackfillHint(checkpoint);
   deps.onCheckpointLoaded?.({
     checkpoint,
     totalLeaves,
     uploadedLeaves: checkpoint.uploadedLeafKeys.length,
     indexVerifiedLeaves: checkpoint.indexVerifiedLeafKeys.length,
     failedLeaves: checkpoint.failedLeafKeys.length,
+    needsLeafUriBackfill,
   });
+  if (needsLeafUriBackfill) {
+    deps.onHint?.(formatLeafUriBackfillHint(checkpoint));
+  }
 
   const artifactCtx: ArtifactContext | undefined =
     deps.leafIndexCheck === undefined

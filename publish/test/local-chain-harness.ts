@@ -8,6 +8,10 @@ import {
   createBaseSepoliaReader,
   type BaseSepoliaPublisher,
 } from '../src/adapters/base-sepolia-publisher.js';
+import {
+  createRegistryPublisher,
+  type RegistryPublisher,
+} from '../src/adapters/registry-publisher.js';
 
 const HARDHAT_MNEMONIC = 'test test test test test test test test test test test junk';
 const ACCOUNT_COUNT = 20;
@@ -21,6 +25,7 @@ export interface LocalChainHarness {
   registryAddress: Address;
   getAccount(index: number): LocalChainAccount;
   createPublisher(index: number): BaseSepoliaPublisher;
+  createRegistryPublisher(index: number): RegistryPublisher;
   createReader(): Pick<
     BaseSepoliaPublisher,
     'readEpochCount' | 'readLatestEpoch' | 'waitForLatestEpoch'
@@ -72,6 +77,20 @@ async function createHarness(): Promise<LocalChainHarness> {
         throw new Error(`Local chain account index ${String(index)} is out of range`);
       }
       return createBaseSepoliaPublisher({
+        privateKeyHex: account.privateKeyHex,
+        registryAddress: registry.address,
+        chain: hardhat,
+        publicClient,
+        walletClient: account.walletClient,
+      });
+    },
+
+    createRegistryPublisher(index: number): RegistryPublisher {
+      const account = accounts[index];
+      if (account === undefined) {
+        throw new Error(`Local chain account index ${String(index)} is out of range`);
+      }
+      return createRegistryPublisher({
         privateKeyHex: account.privateKeyHex,
         registryAddress: registry.address,
         chain: hardhat,
