@@ -137,7 +137,7 @@ describe('genesis publish full offline simulation', () => {
       jsonlSha256: `0x${'e'.repeat(64)}`,
       manifestHash: `0x${'d'.repeat(64)}`,
       parentRoot: `0x${'0'.repeat(64)}`,
-      manifestUri: 'ar://wrong-manifest',
+      manifestUri: report.manifestUri,
     });
 
     const { gatewayUrl, graphqlUrl, fetchImpl } = createMockIrysGateway(

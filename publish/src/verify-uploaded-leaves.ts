@@ -12,6 +12,7 @@ import {
   setLeafUri,
   type PublishCheckpoint,
 } from './publish-checkpoint.js';
+import { leafTxIdToUri, resolveLeafTxId } from './resolve-leaf-tx-id.js';
 import { runWithConcurrency } from './run-with-concurrency.js';
 
 export interface VerifyUploadedLeavesOptions {
@@ -31,6 +32,11 @@ export interface VerifyUploadedLeavesOptions {
   postReuploadDelayMs?: number;
   /** Verify by tx id directly from the gateway when GraphQL lags (default false). */
   gatewayFallback?: boolean;
+  /**
+   * When true, skip the long GraphQL poll before re-upload. Uses checkpoint leafUri,
+   * a single GraphQL tx-id lookup, then re-upload + gateway verify (--anchor-only).
+   */
+  skipGraphqlPoll?: boolean;
   uploader?: Uploader;
   checkpoint?: PublishCheckpoint;
   checkpointPath?: string;
@@ -74,7 +80,10 @@ function isMissingLeafError(error: unknown): boolean {
 
 function isIndexTimeoutError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return message.includes('not indexed via GraphQL');
+  return (
+    message.includes('not indexed via GraphQL') ||
+    message.includes('not retrievable via gateway')
+  );
 }
 
 async function waitForLeaf(
@@ -141,12 +150,145 @@ async function updateCheckpoint(
   await state.chain;
 }
 
+async function verifyViaGateway(
+  options: VerifyUploadedLeavesOptions,
+  uri: string,
+): Promise<boolean> {
+  if (options.gatewayFallback !== true) return false;
+  return verifyLeafFromGateway({
+    gatewayUrl: options.gatewayUrl,
+    txIdOrUri: uri,
+    merkleRoot: options.epoch.merkleRoot,
+    fetchImpl: options.fetchImpl,
+  });
+}
+
+async function persistLeafUri(
+  options: VerifyUploadedLeavesOptions,
+  state: CheckpointState,
+  leafKey: string,
+  uri: string,
+): Promise<void> {
+  await updateCheckpoint(options, state, (checkpoint) => setLeafUri(checkpoint, leafKey, uri));
+}
+
+async function tryGatewayUri(
+  options: VerifyUploadedLeavesOptions,
+  state: CheckpointState,
+  leafKey: string,
+  uri: string,
+  markVerified: () => Promise<void>,
+): Promise<boolean> {
+  if (await verifyViaGateway(options, uri)) {
+    await markVerified();
+    return true;
+  }
+  return false;
+}
+
+async function resolveAndVerifyFromGraphql(
+  options: VerifyUploadedLeavesOptions,
+  state: CheckpointState,
+  leafKey: string,
+  markVerified: () => Promise<void>,
+): Promise<boolean> {
+  const txId = await resolveLeafTxId({
+    graphqlUrl: options.graphqlUrl,
+    publisher: options.publisher,
+    epochNumber: options.epochNumber,
+    leafKey,
+    fetchImpl: options.fetchImpl,
+  });
+  if (txId === null) return false;
+
+  const uri = leafTxIdToUri(txId);
+  await persistLeafUri(options, state, leafKey, uri);
+  return tryGatewayUri(options, state, leafKey, uri, markVerified);
+}
+
+async function verifyLeafGatewayFirst(
+  options: VerifyUploadedLeavesOptions,
+  getLeaf: ReturnType<typeof createArweaveGetLeaf>,
+  leafKey: string,
+  state: CheckpointState,
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const sleep = options.sleep ?? defaultSleep;
+  const maxReuploads = options.reuploadOnFailure === true
+    ? (options.maxReuploadAttempts ?? DEFAULT_REUPLOAD_ATTEMPTS)
+    : 0;
+  const postReuploadDelayMs = options.postReuploadDelayMs ?? 0;
+
+  const markVerified = async (): Promise<void> => {
+    await updateCheckpoint(options, state, (checkpoint) =>
+      markLeafIndexVerified(checkpoint, leafKey),
+    );
+  };
+
+  const knownUri = state.current?.leafUris[leafKey];
+  if (knownUri !== undefined && (await tryGatewayUri(options, state, leafKey, knownUri, markVerified))) {
+    return;
+  }
+
+  if (await resolveAndVerifyFromGraphql(options, state, leafKey, markVerified)) {
+    return;
+  }
+
+  let reuploadsUsed = 0;
+  while (reuploadsUsed < maxReuploads) {
+    if (options.uploader === undefined) break;
+
+    reuploadsUsed += 1;
+    options.onReupload?.(leafKey, reuploadsUsed, maxReuploads);
+    const upload = await reuploadLeaf(options, leafKey);
+    await persistLeafUri(options, state, leafKey, upload.uri);
+
+    if (await tryGatewayUri(options, state, leafKey, upload.uri, markVerified)) {
+      return;
+    }
+
+    if (await resolveAndVerifyFromGraphql(options, state, leafKey, markVerified)) {
+      return;
+    }
+
+    if (postReuploadDelayMs > 0) {
+      await sleep(postReuploadDelayMs);
+    }
+  }
+
+  // Last resort: short GraphQL poll (e.g. bundler indexed but gateway lagged).
+  try {
+    await waitForLeaf(
+      getLeaf,
+      leafKey,
+      options.epoch.merkleRoot,
+      Date.now() + timeoutMs,
+      pollIntervalMs,
+      sleep,
+    );
+    await markVerified();
+    return;
+  } catch {
+    // fall through
+  }
+
+  throw new Error(
+    `LeafKey ${leafKey} not retrievable via gateway after ${String(reuploadsUsed)} re-upload(s); ` +
+      're-run with --retry-failed',
+  );
+}
+
 async function verifyLeafWithRecovery(
   options: VerifyUploadedLeavesOptions,
   getLeaf: ReturnType<typeof createArweaveGetLeaf>,
   leafKey: string,
   state: CheckpointState,
 ): Promise<void> {
+  if (options.skipGraphqlPoll === true) {
+    return verifyLeafGatewayFirst(options, getLeaf, leafKey, state);
+  }
+
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const sleep = options.sleep ?? defaultSleep;
@@ -164,14 +306,7 @@ async function verifyLeafWithRecovery(
 
   const knownUri = state.current?.leafUris[leafKey];
   if (gatewayFallback && knownUri !== undefined) {
-    const ok = await verifyLeafFromGateway({
-      gatewayUrl: options.gatewayUrl,
-      txIdOrUri: knownUri,
-      merkleRoot: options.epoch.merkleRoot,
-      fetchImpl: options.fetchImpl,
-    });
-    if (ok) {
-      await markVerified();
+    if (await tryGatewayUri(options, state, leafKey, knownUri, markVerified)) {
       return;
     }
   }
@@ -200,21 +335,10 @@ async function verifyLeafWithRecovery(
       reuploadsUsed += 1;
       options.onReupload?.(leafKey, reuploadsUsed, maxReuploads);
       const upload = await reuploadLeaf(options, leafKey);
-      await updateCheckpoint(options, state, (checkpoint) =>
-        setLeafUri(checkpoint, leafKey, upload.uri),
-      );
+      await persistLeafUri(options, state, leafKey, upload.uri);
 
-      if (gatewayFallback) {
-        const ok = await verifyLeafFromGateway({
-          gatewayUrl: options.gatewayUrl,
-          txIdOrUri: upload.uri,
-          merkleRoot: options.epoch.merkleRoot,
-          fetchImpl: options.fetchImpl,
-        });
-        if (ok) {
-          await markVerified();
-          return;
-        }
+      if (gatewayFallback && (await tryGatewayUri(options, state, leafKey, upload.uri, markVerified))) {
+        return;
       }
 
       if (postReuploadDelayMs > 0) {

@@ -51,6 +51,7 @@ export interface LeafIndexCheckOptions {
   maxReuploadAttempts?: number;
   postReuploadDelayMs?: number;
   gatewayFallback?: boolean;
+  skipGraphqlPoll?: boolean;
   onReupload?: VerifyUploadedLeavesOptions['onReupload'];
   onDelay?: VerifyUploadedLeavesOptions['onDelay'];
   onLeafFailed?: VerifyUploadedLeavesOptions['onLeafFailed'];
@@ -388,6 +389,7 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
       maxReuploadAttempts: deps.leafIndexCheck.maxReuploadAttempts,
       postReuploadDelayMs: deps.leafIndexCheck.postReuploadDelayMs,
       gatewayFallback: deps.leafIndexCheck.gatewayFallback,
+      skipGraphqlPoll: deps.leafIndexCheck.skipGraphqlPoll,
       onReupload: deps.leafIndexCheck.onReupload,
       onDelay: deps.leafIndexCheck.onDelay,
       onLeafFailed: deps.leafIndexCheck.onLeafFailed,

@@ -82,6 +82,10 @@ export interface OnChainEpoch {
 export interface WaitForLatestEpochOptions {
   maxAttempts?: number;
   delayMs?: number;
+  /** Wait until epochCount reaches at least this value (default 1). */
+  minEpochCount?: bigint;
+  /** Wait until latestEpoch.manifestUri matches (incremental publish race guard). */
+  expectedManifestUri?: string;
 }
 
 export interface BaseSepoliaPublisher extends ChainPublisher, EpochCountReader {
@@ -110,6 +114,42 @@ function requireRpcUrl(rpcUrl: string | undefined): string {
     throw new Error('rpcUrl is required when no client is provided');
   }
   return rpcUrl;
+}
+
+async function waitForLatestEpochOnChain(
+  readCount: (publisher: Address) => Promise<bigint>,
+  readLatest: (publisher: Address) => Promise<OnChainEpoch>,
+  publisher: Address,
+  waitOptions?: WaitForLatestEpochOptions,
+): Promise<OnChainEpoch> {
+  const maxAttempts = waitOptions?.maxAttempts ?? 15;
+  const delayMs = waitOptions?.delayMs ?? 400;
+  const minEpochCount = waitOptions?.minEpochCount ?? 1n;
+  const expectedManifestUri = waitOptions?.expectedManifestUri;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const count = await readCount(publisher);
+    if (count < minEpochCount) {
+      if (attempt < maxAttempts) await sleep(delayMs);
+      continue;
+    }
+
+    const latest = await readLatest(publisher);
+    if (expectedManifestUri !== undefined && latest.manifestUri !== expectedManifestUri) {
+      if (attempt < maxAttempts) await sleep(delayMs);
+      continue;
+    }
+
+    return latest;
+  }
+
+  const detail =
+    expectedManifestUri !== undefined
+      ? ` with manifestUri ${expectedManifestUri}`
+      : '';
+  throw new Error(
+    `Timed out waiting for on-chain epoch ${String(minEpochCount)}${detail} for publisher ${publisher}`,
+  );
 }
 
 /** Read-only registry access (verify-only CLI, no signing). */
@@ -150,25 +190,18 @@ export function createBaseSepoliaReader(
       publisher: Address,
       waitOptions?: WaitForLatestEpochOptions,
     ): Promise<OnChainEpoch> {
-      const maxAttempts = waitOptions?.maxAttempts ?? 15;
-      const delayMs = waitOptions?.delayMs ?? 400;
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const count = await publicClient.readContract({
-          address: registryAddress,
-          abi: REGISTRY_ABI,
-          functionName: 'epochCount',
-          args: [publisher],
-        });
-        if (count > 0n) {
-          return this.readLatestEpoch(publisher);
-        }
-        if (attempt < maxAttempts) {
-          await sleep(delayMs);
-        }
-      }
-
-      throw new Error(`Timed out waiting for on-chain epoch for publisher ${publisher}`);
+      return waitForLatestEpochOnChain(
+        (addr) =>
+          publicClient.readContract({
+            address: registryAddress,
+            abi: REGISTRY_ABI,
+            functionName: 'epochCount',
+            args: [addr],
+          }),
+        (addr) => this.readLatestEpoch(addr),
+        publisher,
+        waitOptions,
+      );
     },
   };
 }
@@ -242,25 +275,18 @@ export function createBaseSepoliaPublisher(
       publisher: Address,
       options?: WaitForLatestEpochOptions,
     ): Promise<OnChainEpoch> {
-      const maxAttempts = options?.maxAttempts ?? 15;
-      const delayMs = options?.delayMs ?? 400;
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const count = await publicClient.readContract({
-          address: registryAddress,
-          abi: REGISTRY_ABI,
-          functionName: 'epochCount',
-          args: [publisher],
-        });
-        if (count > 0n) {
-          return this.readLatestEpoch(publisher);
-        }
-        if (attempt < maxAttempts) {
-          await sleep(delayMs);
-        }
-      }
-
-      throw new Error(`Timed out waiting for on-chain epoch for publisher ${publisher}`);
+      return waitForLatestEpochOnChain(
+        (addr) =>
+          publicClient.readContract({
+            address: registryAddress,
+            abi: REGISTRY_ABI,
+            functionName: 'epochCount',
+            args: [addr],
+          }),
+        (addr) => this.readLatestEpoch(addr),
+        publisher,
+        options,
+      );
     },
   };
 }

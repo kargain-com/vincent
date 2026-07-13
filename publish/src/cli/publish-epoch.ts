@@ -15,11 +15,12 @@ import { formatEther } from 'viem';
 
 import { createBaseSepoliaPublisher, createBaseSepoliaReader } from '../adapters/base-sepolia-publisher.js';
 import { createIrysDevnetUploader } from '../adapters/irys-devnet-uploader.js';
-import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL } from '../constants.js';
+import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL, IRYS_TESTNET_GATEWAY_URL } from '../constants.js';
 import { loadFullSeedClaims } from '../load-full-seed-claims.js';
 import { preflightEpochPublish } from '../preflight-genesis-publish.js';
 import {
   DEFAULT_ANCHOR_ONLY_INDEX_CHECK_MAX_REUPLOADS,
+  DEFAULT_ANCHOR_ONLY_INDEX_CHECK_TIMEOUT_MS,
   DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS,
   DEFAULT_FULL_INDEX_CHECK_CONCURRENCY,
   DEFAULT_FULL_INDEX_CHECK_DELAY_MS,
@@ -31,6 +32,7 @@ import {
 } from '../constants.js';
 import {
   failedLeafKeySet,
+  loadCheckpoint,
   loadOrCreateCheckpoint,
   uploadedLeafKeySet,
 } from '../publish-checkpoint.js';
@@ -222,6 +224,14 @@ function optionalEnv(name: string, fallback: string): string {
   return value === undefined || value.length === 0 ? fallback : value;
 }
 
+function resolveIrysGatewayUrl(devnet: boolean): string {
+  const configured = process.env.IRYS_GATEWAY_URL;
+  if (configured !== undefined && configured.length > 0) {
+    return configured;
+  }
+  return devnet ? IRYS_TESTNET_GATEWAY_URL : IRYS_GATEWAY_URL;
+}
+
 function optionalFundTxId(): `0x${string}` | undefined {
   const value = process.env.VINCENT_IRYS_RECOVER_FUND_TX;
   if (value === undefined || value.length === 0) {
@@ -275,7 +285,7 @@ async function runVerifyOnly(options: CliOptions): Promise<void> {
 
   const rpcUrl = requireEnv('BASE_SEPOLIA_RPC_URL');
   assertBaseSepoliaRpcUrl(rpcUrl, 'BASE_SEPOLIA_RPC_URL');
-  const irysGatewayUrl = optionalEnv('IRYS_GATEWAY_URL', IRYS_GATEWAY_URL);
+  const irysGatewayUrl = resolveIrysGatewayUrl(options.devnet);
   const irysGraphqlUrl = optionalEnv('IRYS_GRAPHQL_URL', IRYS_GRAPHQL_URL);
   assertIrysGraphqlUrl(irysGraphqlUrl, 'IRYS_GRAPHQL_URL');
   const publisher = toChecksumAddress(options.publisher);
@@ -309,6 +319,12 @@ async function runVerifyOnly(options: CliOptions): Promise<void> {
     gatewayUrl: irysGatewayUrl,
     graphqlUrl: irysGraphqlUrl,
     fixture: options.fixture,
+    epochNumber: manifest.epoch,
+    leafUris: loadCheckpoint(options.checkpointFile)?.leafUris,
+    waitForLatestEpochOptions: {
+      minEpochCount: BigInt(manifest.epoch),
+      expectedManifestUri: options.manifestUri,
+    },
   });
   for (const failure of verification.failures) {
     process.stdout.write(`FAIL ${failure}\n`);
@@ -393,7 +409,7 @@ async function runPublish(options: CliOptions): Promise<void> {
   const privateKey = normalizePrivateKey(requireEnv('VINCENT_GENESIS_PRIVATE_KEY'));
   const rpcUrl = requireEnv('BASE_SEPOLIA_RPC_URL');
   assertBaseSepoliaRpcUrl(rpcUrl, 'BASE_SEPOLIA_RPC_URL');
-  const irysGatewayUrl = optionalEnv('IRYS_GATEWAY_URL', IRYS_GATEWAY_URL);
+  const irysGatewayUrl = resolveIrysGatewayUrl(options.devnet);
   const irysGraphqlUrl = optionalEnv('IRYS_GRAPHQL_URL', IRYS_GRAPHQL_URL);
   assertIrysGraphqlUrl(irysGraphqlUrl, 'IRYS_GRAPHQL_URL');
   const publisher = toChecksumAddress(addressFromPrivateKey(privateKey));
@@ -576,7 +592,11 @@ async function runPublish(options: CliOptions): Promise<void> {
       graphqlUrl: irysGraphqlUrl,
       timeoutMs:
         options.indexCheckTimeoutMs ??
-        (options.fixture === 'full' ? DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS : undefined),
+        (options.anchorOnly
+          ? DEFAULT_ANCHOR_ONLY_INDEX_CHECK_TIMEOUT_MS
+          : options.fixture === 'full'
+            ? DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS
+            : undefined),
       delayMs:
         options.indexCheckDelayMs ??
         (options.anchorOnly
@@ -595,6 +615,7 @@ async function runPublish(options: CliOptions): Promise<void> {
         : DEFAULT_POST_REUPLOAD_DELAY_MS,
       reuploadOnFailure: true,
       gatewayFallback: true,
+      skipGraphqlPoll: true,
       onDelay: (delayMs) => {
         process.stdout.write(
           `Waiting ${String(Math.round(delayMs / 1000))}s for Irys bundler index catch-up...\n`,
@@ -636,6 +657,11 @@ async function runPublish(options: CliOptions): Promise<void> {
     gatewayUrl: irysGatewayUrl,
     graphqlUrl: irysGraphqlUrl,
     fixture: options.fixture,
+    leafUris: loadCheckpoint(options.checkpointFile)?.leafUris,
+    waitForLatestEpochOptions: {
+      minEpochCount: BigInt(report.manifest.epoch),
+      expectedManifestUri: report.manifestUri,
+    },
   });
   for (const failure of verification.failures) {
     process.stdout.write(`FAIL ${failure}\n`);

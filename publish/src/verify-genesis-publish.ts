@@ -1,8 +1,11 @@
 import { createArweaveGetLeaf } from '@kargain/vincent/arweave';
-import { createDecoder } from '@kargain/vincent/decoder';
+import { createDecoder, type GetLeaf } from '@kargain/vincent/decoder';
 import type { Manifest } from '@kargain/vincent/protocol';
 
-import type { OnChainEpoch } from './adapters/base-sepolia-publisher.js';
+import type {
+  OnChainEpoch,
+  WaitForLatestEpochOptions,
+} from './adapters/base-sepolia-publisher.js';
 import { bytes32ToContentId, sha256ContentIdToBytes32 } from './adapters/sha256-bytes32.js';
 import type { PublishGenesisReport } from './adapters/types.js';
 import {
@@ -12,11 +15,15 @@ import {
   VIN_FUEL,
   VIN_PLANT,
 } from './cli/genesis-mini-vins.js';
+import { fetchLeafFromGateway } from './fetch-leaf-from-gateway.js';
 import { loadSeedFixtureCases } from './seed-fixtures.js';
 import { manifestHash, verifySignedManifest } from './sign-manifest.js';
 
 export interface GenesisPublishChainVerifier {
-  waitForLatestEpoch(publisher: `0x${string}`): Promise<OnChainEpoch>;
+  waitForLatestEpoch(
+    publisher: `0x${string}`,
+    options?: WaitForLatestEpochOptions,
+  ): Promise<OnChainEpoch>;
 }
 
 export interface VerifyGenesisPublishOptions {
@@ -28,6 +35,9 @@ export interface VerifyGenesisPublishOptions {
   fetchImpl?: typeof fetch;
   /** Leaf tag epoch for getLeaf (defaults to report.manifest.epoch). */
   epochNumber?: number;
+  /** Checkpoint leafKey → ar://txId map for gateway-first decode. */
+  leafUris?: Record<string, string>;
+  waitForLatestEpochOptions?: WaitForLatestEpochOptions;
 }
 
 export interface VerifyGenesisPublishResult {
@@ -55,6 +65,36 @@ async function fetchManifest(
   return (await response.json()) as Manifest;
 }
 
+function createGetLeafWithUriFallback(options: {
+  gatewayUrl: string;
+  graphqlUrl: string;
+  publisher: string;
+  epochNumber: number;
+  fetchImpl?: typeof fetch;
+  leafUris?: Record<string, string>;
+}): GetLeaf {
+  const graphqlGetLeaf = createArweaveGetLeaf({
+    gatewayUrl: options.gatewayUrl,
+    graphqlUrl: options.graphqlUrl,
+    publisher: options.publisher,
+    epoch: options.epochNumber,
+    fetchImpl: options.fetchImpl,
+  });
+  const uris = options.leafUris ?? {};
+
+  return async (leafKey: string) => {
+    const uri = uris[leafKey];
+    if (uri !== undefined) {
+      try {
+        return await fetchLeafFromGateway(options.gatewayUrl, uri, options.fetchImpl);
+      } catch {
+        // Fall back to GraphQL tag query.
+      }
+    }
+    return graphqlGetLeaf(leafKey);
+  };
+}
+
 async function verifyFixtureVins(
   gatewayUrl: string,
   graphqlUrl: string,
@@ -62,14 +102,16 @@ async function verifyFixtureVins(
   merkleRoot: string,
   epochNumber: number,
   fetchImpl: typeof fetch,
+  leafUris?: Record<string, string>,
 ): Promise<string[]> {
   const failures: string[] = [];
-  const getLeaf = createArweaveGetLeaf({
+  const getLeaf = createGetLeafWithUriFallback({
     gatewayUrl,
     graphqlUrl,
     publisher,
-    epoch: epochNumber,
+    epochNumber,
     fetchImpl,
+    leafUris,
   });
   const decoder = createDecoder({ merkleRoot, getLeaf });
 
@@ -111,13 +153,15 @@ async function verifySeedFixtureVins(
   merkleRoot: string,
   epochNumber: number,
   fetchImpl: typeof fetch,
+  leafUris?: Record<string, string>,
 ): Promise<string[]> {
-  const getLeaf = createArweaveGetLeaf({
+  const getLeaf = createGetLeafWithUriFallback({
     gatewayUrl,
     graphqlUrl,
     publisher,
-    epoch: epochNumber,
+    epochNumber,
     fetchImpl,
+    leafUris,
   });
   const decoder = createDecoder({ merkleRoot, getLeaf });
 
@@ -165,8 +209,15 @@ export async function verifyGenesisPublish(
   const { report } = options;
   const epochNumber = options.epochNumber ?? report.manifest.epoch;
 
+  const waitOptions: WaitForLatestEpochOptions = {
+    minEpochCount: BigInt(report.manifest.epoch),
+    expectedManifestUri: report.manifestUri,
+    ...options.waitForLatestEpochOptions,
+  };
+
   const onChain = await options.chainPublisher.waitForLatestEpoch(
     report.publisher as `0x${string}`,
+    waitOptions,
   );
 
   if (bytes32ToContentId(onChain.merkleRoot) !== report.manifest.dataset.merkleRoot) {
@@ -205,6 +256,7 @@ export async function verifyGenesisPublish(
         report.manifest.dataset.merkleRoot,
         epochNumber,
         fetchImpl,
+        options.leafUris,
       )),
     );
   } else {
@@ -216,6 +268,7 @@ export async function verifyGenesisPublish(
         report.manifest.dataset.merkleRoot,
         epochNumber,
         fetchImpl,
+        options.leafUris,
       )),
     );
   }

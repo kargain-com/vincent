@@ -124,7 +124,7 @@ Env vars:
 |----------|---------|
 | `VINCENT_GENESIS_PRIVATE_KEY` | Signs manifest; pays Irys devnet + Base Sepolia gas |
 | `BASE_SEPOLIA_RPC_URL` | Base Sepolia JSON-RPC for anchor registry **and** Irys `base-eth` uploads (same as Kargain) |
-| `IRYS_GATEWAY_URL` | Optional data gateway; defaults to `https://gateway.irys.xyz` |
+| `IRYS_GATEWAY_URL` | Optional data gateway; defaults to `https://testnet-gateway.irys.xyz` for `--devnet`, else `https://gateway.irys.xyz` |
 | `IRYS_GRAPHQL_URL` | Optional tag-query endpoint; defaults to `https://uploader.irys.xyz/graphql` |
 | `VINCENT_IRYS_RECOVER_FUND_TX` | Optional Base Sepolia fund tx hash to register with Irys without sending a new payment |
 
@@ -178,15 +178,33 @@ The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves in 
 
 The fingerprint is `publisher + epochNumber + merkleRoot + jsonlSha256`; delete the file when switching builds or publishers. Old v1 checkpoints are migrated automatically (their `completedLeafKeys` become `indexVerifiedLeafKeys`).
 
-**Index-check is non-fail-fast with a gateway fallback.** Before index-check on full publishes (after a fresh upload), the CLI waits **3 minutes** (bundler catch-up) then verifies leaves in parallel (default concurrency 20). **`--anchor-only` skips this delay** (leaves were uploaded earlier). Progress logs every **25** verified leaves and starts from the checkpoint count on resume. On GraphQL timeout the CLI **re-uploads** the leaf, records its tx URI, and immediately verifies the leaf **directly from the gateway by tx id** (Merkle-proof check, no GraphQL); only on a gateway miss does it wait **90s** and retry GraphQL (up to **6** attempts for `--anchor-only`). A leaf that exhausts all attempts is added to `failedLeafKeys` and the check **continues with the remaining leaves**. When any leaf fails, the run ends with a summary and **no chain transaction is sent** — fix with `--retry-failed` below.
+**Index-check is non-fail-fast with gateway-first verification.** Both full publish and `--anchor-only` use the same per-leaf path: checkpoint `leafUris` → one-shot GraphQL tx-id lookup → re-upload + immediate gateway Merkle check → short last-resort GraphQL poll (**5s**). The long **120s** GraphQL poll per leaf is no longer the primary path. Before index-check on a fresh full upload, the CLI still waits **3 minutes** (bundler catch-up). Re-upload attempts are capped at **2** per leaf. Post-publish live verification waits until on-chain `latestEpoch.manifestUri` matches the report (fixes incremental epoch race).
+
+| Mode | Initial delay | Re-upload attempts | Post re-upload delay |
+|------|---------------|-------------------|----------------------|
+| Full publish | **3 min** bundler catch-up | **2** | **60s** (only if gateway miss after re-upload) |
+| `--anchor-only` | **0** | **2** | **0** |
 
 Preflight quotes only **remaining** upload bytes (leaves not in checkpoint + artifacts not yet valid on Irys). `--retry-failed` quotes only the failed leaf bytes. `--anchor-only` skips the Irys upload budget quote.
+
+### Backfill `leafUris` from GraphQL
+
+When the original upload did not record tx ids (e.g. checkpoint migrated from v1), bulk-query owner+epoch tags and merge into `leafUris` **without** re-uploading:
+
+```bash
+pnpm --filter @kargain/vincent-publish backfill:leaf-uris -- --devnet --epoch 2
+```
+
+This paginates `transactions(owners, tags: App+Epoch)` (no per-LeafKey filter), extracts `LeafKey` tags, and writes `leafUris` to the checkpoint. Run before `--anchor-only` when many leaves would otherwise re-upload.
 
 ### Recovery playbook
 
 When index-check reported failed leaves (e.g. devnet GraphQL never indexed ~20 of 14k):
 
 ```bash
+# 0) Optional: backfill tx ids from GraphQL bulk query (avoids re-uploading already-uploaded leaves)
+pnpm --filter @kargain/vincent-publish backfill:leaf-uris -- --devnet --epoch 2
+
 # 1) Check all leaves; collect failures instead of stopping at the first one
 caffeinate -i pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --anchor-only
 
@@ -211,15 +229,15 @@ Delete `publish/.vincent-publish-checkpoint.json` only when the compiled epoch f
 
 ### Re-verify an existing epoch (verify-only)
 
-To re-check a deployment without re-publishing:
+To re-check a deployment without re-publishing (uses checkpoint `leafUris` for gateway-first decode when available):
 
 ```bash
-pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --verify-only \
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --verify-only \
   --publisher 0xYourPublisher \
   --manifest-uri ar://YourManifestTxId
 ```
 
-Requires `BASE_SEPOLIA_RPC_URL` only (no private key unless set for other tooling).
+Post-publish verification waits until on-chain `latestEpoch.manifestUri` matches the report before comparing hashes. Requires `BASE_SEPOLIA_RPC_URL` only (no private key unless set for other tooling).
 
 ## Fixtures
 

@@ -1,3 +1,4 @@
+import type { WaitForLatestEpochOptions } from '../src/adapters/base-sepolia-publisher.js';
 import { ZERO_BYTES32 } from '../src/adapters/sha256-bytes32.js';
 import { TEST_PUBLISHER } from '../src/constants.js';
 import type { PublishEpochArgs } from '../src/adapters/types.js';
@@ -20,7 +21,10 @@ export interface MockChainPublisher extends EpochCountReader {
   readonly publisher: `0x${string}`;
   publishEpoch(args: PublishEpochArgs): Promise<`0x${string}`>;
   readLatestEpoch(publisher?: `0x${string}`): MockOnChainEpoch;
-  waitForLatestEpoch(publisher: `0x${string}`): Promise<MockOnChainEpoch>;
+  waitForLatestEpoch(
+    publisher: `0x${string}`,
+    options?: WaitForLatestEpochOptions,
+  ): Promise<MockOnChainEpoch>;
 }
 
 function assertNonZeroBytes32(value: `0x${string}`, label: string): void {
@@ -68,11 +72,27 @@ export function createMockChainPublisher(options?: {
       return { ...epochs[epochs.length - 1], timestamp: 1n };
     },
 
-    async waitForLatestEpoch(address: `0x${string}`): Promise<MockOnChainEpoch> {
+    async waitForLatestEpoch(
+      address: `0x${string}`,
+      options?: WaitForLatestEpochOptions,
+    ): Promise<MockOnChainEpoch> {
       if (address.toLowerCase() !== publisher.toLowerCase() || epochs.length === 0) {
         throw new Error('no epochs');
       }
-      return this.readLatestEpoch(address);
+      const minEpochCount = options?.minEpochCount ?? 1n;
+      if (BigInt(epochs.length) < minEpochCount) {
+        throw new Error(`epoch count ${String(epochs.length)} < ${String(minEpochCount)}`);
+      }
+      const latest = this.readLatestEpoch(address);
+      if (
+        options?.expectedManifestUri !== undefined &&
+        latest.manifestUri !== options.expectedManifestUri
+      ) {
+        throw new Error(
+          `latest manifestUri ${latest.manifestUri} !== ${options.expectedManifestUri}`,
+        );
+      }
+      return latest;
     },
 
     async publishEpoch(args: PublishEpochArgs): Promise<`0x${string}`> {

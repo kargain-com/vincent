@@ -377,4 +377,66 @@ describe('verifyUploadedLeaves gateway fallback', () => {
     expect(result.failed).toEqual([]);
     expect(result.verified).toBe(built.value.leaves.size);
   });
+
+  it('skipGraphqlPoll verifies via gateway without waiting for GraphQL poll', async () => {
+    const built = compile(loadGenesisMiniClaims(), {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const uploader = createMockUploader();
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    for (const [leafKey, entry] of sortedLeaves) {
+      await uploader.upload(
+        new TextEncoder().encode(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })),
+        [
+          { name: 'App', value: 'vincent' },
+          { name: 'Epoch', value: '1' },
+          { name: 'LeafKey', value: leafKey },
+        ],
+      );
+    }
+
+    const liveGateway = createLiveMockIrysFetchImpl(uploader, TEST_PUBLISHER, 1);
+    const emptyGraphql: typeof fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url === liveGateway.graphqlUrl && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: { transactions: { edges: [] } } }), { status: 200 }),
+        );
+      }
+      return liveGateway.fetchImpl(input, init);
+    };
+
+    const start = Date.now();
+    const result = await verifyUploadedLeaves({
+      epoch: built.value,
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      gatewayUrl: liveGateway.gatewayUrl,
+      graphqlUrl: liveGateway.graphqlUrl,
+      fetchImpl: emptyGraphql,
+      pollIntervalMs: 0,
+      sleep: async () => {},
+      concurrency: 4,
+      gatewayFallback: true,
+      skipGraphqlPoll: true,
+      reuploadOnFailure: true,
+      maxReuploadAttempts: 1,
+      uploader,
+      checkpoint: createEmptyCheckpoint({
+        publisher: TEST_PUBLISHER,
+        epochNumber: 1,
+        merkleRoot: built.value.merkleRoot,
+        jsonlSha256: built.value.jsonlSha256,
+      }),
+      checkpointPath: testCheckpointPath(),
+    });
+    const elapsedMs = Date.now() - start;
+
+    expect(result.failed).toEqual([]);
+    expect(result.verified).toBe(sortedLeaves.length);
+    // Gateway-first must not spend 120s per leaf on GraphQL polling.
+    expect(elapsedMs).toBeLessThan(30_000);
+  });
 });

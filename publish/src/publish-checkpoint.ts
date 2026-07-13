@@ -239,6 +239,18 @@ export function setLeafUri(
   };
 }
 
+export function mergeLeafUris(
+  checkpoint: PublishCheckpoint,
+  uris: Record<string, string>,
+): PublishCheckpoint {
+  if (Object.keys(uris).length === 0) return checkpoint;
+  return {
+    ...checkpoint,
+    leafUris: { ...checkpoint.leafUris, ...uris },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function saveCheckpoint(path: string, checkpoint: PublishCheckpoint): void {
   mkdirSync(dirname(path), { recursive: true });
   const tempPath = `${path}.tmp`;

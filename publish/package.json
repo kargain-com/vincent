@@ -18,7 +18,8 @@
     "prevalidate:full-sim": "pnpm --filter @kargain/vincent-contracts build",
     "validate:full-sim": "node --max-old-space-size=8192 ./node_modules/vitest/vitest.mjs run --config vitest.full-sim.config.ts --no-file-parallelism",
     "publish:epoch": "pnpm run build && node dist/cli/publish-epoch.js",
-    "publish:genesis": "pnpm run build && node dist/cli/publish-epoch.js --genesis"
+    "publish:genesis": "pnpm run build && node dist/cli/publish-epoch.js --genesis",
+    "backfill:leaf-uris": "pnpm run build && node dist/cli/backfill-leaf-uris.js"
   },
   "dependencies": {
     "@irys/upload": "^0.0.3",
