@@ -1,3 +1,13 @@
+export { createIrysClient, type IrysClientOptions } from './adapters/irys-client.js';
+export {
+  createIrysDevnetClient,
+  type IrysDevnetClientOptions,
+} from './adapters/irys-devnet-client.js';
+export { createIrysUploader, type IrysUploaderOptions } from './adapters/irys-uploader.js';
+export {
+  createIrysDevnetUploader,
+  type IrysDevnetUploaderOptions,
+} from './adapters/irys-devnet-uploader.js';
 export {
   createBaseSepoliaPublisher,
   createBaseSepoliaReader,
@@ -12,6 +22,9 @@ export {
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_GENESIS_REVIEW_POLICY,
+  DEFAULT_MAINNET_FULL_INDEX_CHECK_DELAY_MS,
+  DEFAULT_MAINNET_MAX_REUPLOAD_LEAVES,
+  DEFAULT_MAINNET_POST_REUPLOAD_DELAY_MS,
   IRYS_DEVNET_BUNDLER_URL,
   IRYS_GATEWAY_URL,
   IRYS_GRAPHQL_URL,
@@ -55,6 +68,13 @@ export {
 } from './publish-checkpoint.js';
 export { publishGenesis } from './publish-genesis.js';
 export { publishEpoch } from './publish-epoch.js';
+export {
+  resolveIndexCheckDefaults,
+  resolveIrysGatewayUrl,
+  resolvePublishNetwork,
+  type PublishNetworkId,
+  type PublishNetworkProfile,
+} from './publish-network.js';
 export { resolveEpochParent } from './resolve-epoch-parent.js';
 export { manifestHash, signManifest, verifySignedManifest } from './sign-manifest.js';
 export { verifyGenesisPublish } from './verify-genesis-publish.js';

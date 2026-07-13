@@ -439,4 +439,45 @@ describe('verifyUploadedLeaves gateway fallback', () => {
     // Gateway-first must not spend 120s per leaf on GraphQL polling.
     expect(elapsedMs).toBeLessThan(30_000);
   });
+
+  it('stops re-uploading when maxReuploadLeaves budget is exhausted', async () => {
+    const built = compile(loadGenesisMiniClaims(), {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const uploader = createMockUploader();
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const leafKey = sortedLeaves[0]![0];
+
+    const result = await verifyUploadedLeaves({
+      epoch: built.value,
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      gatewayUrl: 'https://gateway.test',
+      graphqlUrl: 'https://graphql.test',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ data: { transactions: { edges: [] } } }), { status: 200 }),
+      pollIntervalMs: 0,
+      sleep: async () => {},
+      concurrency: 1,
+      gatewayFallback: true,
+      skipGraphqlPoll: true,
+      reuploadOnFailure: true,
+      maxReuploadAttempts: 2,
+      maxReuploadLeaves: 0,
+      uploader,
+      checkpoint: createEmptyCheckpoint({
+        publisher: TEST_PUBLISHER,
+        epochNumber: 1,
+        merkleRoot: built.value.merkleRoot,
+        jsonlSha256: built.value.jsonlSha256,
+      }),
+      checkpointPath: testCheckpointPath(),
+    });
+
+    const failed = result.failed.find((entry) => entry.leafKey === leafKey);
+    expect(failed).toBeDefined();
+    expect(failed?.error).toMatch(/Re-upload budget exhausted/);
+  });
 });

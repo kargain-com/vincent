@@ -13,6 +13,7 @@ import {
   validateCheckpointFingerprint,
 } from '../publish-checkpoint.js';
 import { assertIrysGraphqlUrl } from '../validate-env-urls.js';
+import { parseNetworkFlags } from './parse-network-flags.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLISH_ROOT = join(__dirname, '../..');
@@ -20,17 +21,12 @@ const PUBLISH_ROOT = join(__dirname, '../..');
 loadEnv({ path: join(PUBLISH_ROOT, '.env') });
 
 interface CliOptions {
-  devnet: boolean;
   epochNumber?: number;
   checkpointFile: string;
 }
 
 function parseArgs(argv: string[]): CliOptions {
-  if (!argv.includes('--devnet')) {
-    throw new Error(
-      'Usage: backfill-leaf-uris --devnet [--epoch=N] [--checkpoint-file=PATH]',
-    );
-  }
+  parseNetworkFlags(argv);
 
   const epochArg = argv.find((arg) => arg.startsWith('--epoch='));
   const epochFlagIndex = argv.indexOf('--epoch');
@@ -53,7 +49,7 @@ function parseArgs(argv: string[]): CliOptions {
     checkpointFile = argv[checkpointFlagIndex + 1] ?? checkpointFile;
   }
 
-  return { devnet: true, epochNumber, checkpointFile };
+  return { epochNumber, checkpointFile };
 }
 
 function requireEnv(name: string): string {

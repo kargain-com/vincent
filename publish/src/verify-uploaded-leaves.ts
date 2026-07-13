@@ -29,6 +29,8 @@ export interface VerifyUploadedLeavesOptions {
   concurrency?: number;
   reuploadOnFailure?: boolean;
   maxReuploadAttempts?: number;
+  /** Cap total leaves re-uploaded across the whole index-check run. */
+  maxReuploadLeaves?: number;
   postReuploadDelayMs?: number;
   /** Verify by tx id directly from the gateway when GraphQL lags (default false). */
   gatewayFallback?: boolean;
@@ -137,6 +139,32 @@ interface CheckpointState {
   chain: Promise<void>;
 }
 
+type ReuploadBudget = {
+  used: number;
+  max: number | undefined;
+};
+
+function canSpendReuploadBudget(budget: ReuploadBudget | undefined): boolean {
+  if (budget === undefined || budget.max === undefined) {
+    return true;
+  }
+  return budget.used < budget.max;
+}
+
+function spendReuploadBudget(budget: ReuploadBudget | undefined): void {
+  if (budget !== undefined) {
+    budget.used += 1;
+  }
+}
+
+function reuploadBudgetExhaustedMessage(budget: ReuploadBudget | undefined): string {
+  const cap = budget?.max ?? 0;
+  return (
+    `Re-upload budget exhausted (${String(cap)} leaves); ` +
+    'run backfill:leaf-uris or pass --allow-reupload'
+  );
+}
+
 async function updateCheckpoint(
   options: VerifyUploadedLeavesOptions,
   state: CheckpointState,
@@ -211,6 +239,7 @@ async function verifyLeafGatewayFirst(
   getLeaf: ReturnType<typeof createArweaveGetLeaf>,
   leafKey: string,
   state: CheckpointState,
+  reuploadBudget?: ReuploadBudget,
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -238,8 +267,12 @@ async function verifyLeafGatewayFirst(
   let reuploadsUsed = 0;
   while (reuploadsUsed < maxReuploads) {
     if (options.uploader === undefined) break;
+    if (!canSpendReuploadBudget(reuploadBudget)) {
+      throw new Error(reuploadBudgetExhaustedMessage(reuploadBudget));
+    }
 
     reuploadsUsed += 1;
+    spendReuploadBudget(reuploadBudget);
     options.onReupload?.(leafKey, reuploadsUsed, maxReuploads);
     const upload = await reuploadLeaf(options, leafKey);
     await persistLeafUri(options, state, leafKey, upload.uri);
@@ -284,9 +317,10 @@ async function verifyLeafWithRecovery(
   getLeaf: ReturnType<typeof createArweaveGetLeaf>,
   leafKey: string,
   state: CheckpointState,
+  reuploadBudget?: ReuploadBudget,
 ): Promise<void> {
   if (options.skipGraphqlPoll === true) {
-    return verifyLeafGatewayFirst(options, getLeaf, leafKey, state);
+    return verifyLeafGatewayFirst(options, getLeaf, leafKey, state, reuploadBudget);
   }
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -329,10 +363,21 @@ async function verifyLeafWithRecovery(
         options.reuploadOnFailure === true &&
         options.uploader !== undefined &&
         reuploadsUsed < maxReuploads &&
-        isIndexTimeoutError(error);
-      if (!canReupload) throw error;
+        isIndexTimeoutError(error) &&
+        canSpendReuploadBudget(reuploadBudget);
+      if (!canReupload) {
+        if (
+          options.reuploadOnFailure === true &&
+          isIndexTimeoutError(error) &&
+          !canSpendReuploadBudget(reuploadBudget)
+        ) {
+          throw new Error(reuploadBudgetExhaustedMessage(reuploadBudget));
+        }
+        throw error;
+      }
 
       reuploadsUsed += 1;
+      spendReuploadBudget(reuploadBudget);
       options.onReupload?.(leafKey, reuploadsUsed, maxReuploads);
       const upload = await reuploadLeaf(options, leafKey);
       await persistLeafUri(options, state, leafKey, upload.uri);
@@ -384,10 +429,14 @@ export async function verifyUploadedLeaves(
   let progressLock: Promise<void> = Promise.resolve();
   const state: CheckpointState = { current: options.checkpoint, chain: Promise.resolve() };
   const failed: VerifyUploadedLeavesResult['failed'] = [];
+  const reuploadBudget: ReuploadBudget = {
+    used: 0,
+    max: options.maxReuploadLeaves,
+  };
 
   await runWithConcurrency(pendingLeafKeys, concurrency, async (leafKey) => {
     try {
-      await verifyLeafWithRecovery(options, getLeaf, leafKey, state);
+      await verifyLeafWithRecovery(options, getLeaf, leafKey, state, reuploadBudget);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failed.push({ leafKey, error: message });

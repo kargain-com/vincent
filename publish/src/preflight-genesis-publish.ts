@@ -1,8 +1,9 @@
 import { addressFromPrivateKey, toChecksumAddress } from '@kargain/vincent/protocol';
-import { createPublicClient, http, parseEther } from 'viem';
+import { createPublicClient, http, parseEther, type Chain } from 'viem';
 import { baseSepolia } from 'viem/chains';
 
-import { createIrysDevnetUploader } from './adapters/irys-devnet-uploader.js';
+import { createIrysUploader } from './adapters/irys-uploader.js';
+import { BASE_SEPOLIA_CHAIN_ID } from './constants.js';
 import { assertGenesisPublisherAvailable, type EpochCountReader } from './assert-genesis-publisher.js';
 import {
   ensureIrysUploadBudget,
@@ -10,12 +11,17 @@ import {
 } from './estimate-epoch-upload-cost.js';
 import type { EpochChainReader } from './resolve-epoch-parent.js';
 import type { EpochBuild } from '@kargain/vincent-compiler';
+import type { PublishNetworkId } from './publish-network.js';
+import { resolvePublishNetwork } from './publish-network.js';
 
 /** Minimum Base Sepolia balance required before any permanent Arweave/Irys uploads. */
 export const DEFAULT_MIN_CHAIN_BALANCE_WEI = parseEther('0.0001');
 
 export interface GenesisPreflightOptions {
   rpcUrl: string;
+  chainId?: number;
+  chain?: Chain;
+  networkId?: PublishNetworkId;
   irysGraphqlUrl?: string;
   minChainBalanceWei?: bigint;
   /** Test override for Base Sepolia balance lookup (anchor gas + Irys funding). */
@@ -60,10 +66,11 @@ function formatError(error: unknown): string {
 
 async function defaultGetBalance(
   rpcUrl: string,
+  chain: Chain,
   publisher: `0x${string}`,
 ): Promise<bigint> {
   const client = createPublicClient({
-    chain: baseSepolia,
+    chain,
     transport: http(rpcUrl),
   });
   return client.getBalance({ address: publisher });
@@ -72,8 +79,9 @@ async function defaultGetBalance(
 async function defaultProbeIrysUploader(
   privateKeyHex: `0x${string}`,
   rpcUrl: string,
+  chainId: number,
 ): Promise<void> {
-  await createIrysDevnetUploader({ privateKeyHex, rpcUrl });
+  await createIrysUploader({ privateKeyHex, rpcUrl, chainId });
 }
 
 async function defaultProbeIrysGraphql(
@@ -188,24 +196,32 @@ async function runSharedPreflight(args: {
     );
   }
 
+  const network =
+    args.preflight.networkId !== undefined
+      ? resolvePublishNetwork(args.preflight.networkId)
+      : undefined;
+  const chainId = args.preflight.chainId ?? network?.chainId ?? BASE_SEPOLIA_CHAIN_ID;
+  const chain = args.preflight.chain ?? network?.chain ?? baseSepolia;
+  const chainLabel = chain.name ?? `chain ${String(chainId)}`;
+
   const minBalance = args.preflight.minChainBalanceWei ?? DEFAULT_MIN_CHAIN_BALANCE_WEI;
   const getBalance =
     args.preflight.getBalance ??
-    ((address: `0x${string}`) => defaultGetBalance(args.preflight.rpcUrl, address));
+    ((address: `0x${string}`) => defaultGetBalance(args.preflight.rpcUrl, chain, address));
 
   let balance: bigint;
   try {
     balance = await getBalance(publisher as `0x${string}`);
   } catch (error) {
     throw new Error(
-      `Base Sepolia RPC unavailable (${args.preflight.rpcUrl}): ${formatError(error)}`,
+      `${chainLabel} RPC unavailable (${args.preflight.rpcUrl}): ${formatError(error)}`,
       { cause: error },
     );
   }
 
   if (balance < minBalance) {
     throw new Error(
-      `Insufficient Base Sepolia balance for ${publisher}: ` +
+      `Insufficient ${chainLabel} balance for ${publisher}: ` +
         `have ${balance.toString()} wei, need at least ${minBalance.toString()} wei ` +
         `for publishEpoch gas and Irys uploads`,
     );
@@ -213,12 +229,12 @@ async function runSharedPreflight(args: {
 
   const probeIrys =
     args.preflight.probeIrysUploader ??
-    (() => defaultProbeIrysUploader(args.privateKeyHex, args.preflight.rpcUrl));
+    (() => defaultProbeIrysUploader(args.privateKeyHex, args.preflight.rpcUrl, chainId));
 
   try {
     await probeIrys();
   } catch (error) {
-    throw new Error(`Irys devnet uploader unavailable: ${formatError(error)}`, {
+    throw new Error(`Irys uploader unavailable on ${chainLabel}: ${formatError(error)}`, {
       cause: error,
     });
   }
@@ -257,6 +273,10 @@ export async function preflightEpochPublish(args: {
   readLatestEpoch?: EpochChainReader['readLatestEpoch'];
 }): Promise<void> {
   const publisher = toChecksumAddress(args.publisher);
+  const network =
+    args.preflight.networkId !== undefined
+      ? resolvePublishNetwork(args.preflight.networkId)
+      : undefined;
 
   await runRegistryPreflight(
     args.epochCountReader,
@@ -275,6 +295,9 @@ export async function preflightEpochPublish(args: {
     await ensureIrysUploadBudget({
       privateKeyHex: args.privateKeyHex,
       rpcUrl: args.preflight.rpcUrl,
+      chainId: args.preflight.chainId ?? network?.chainId,
+      chain: args.preflight.chain ?? network?.chain,
+      networkId: args.preflight.networkId,
       epoch: args.preflight.uploadBudget.epoch,
       epochNumber: args.preflight.uploadBudget.epochNumber,
       parentRootContentId: args.preflight.uploadBudget.parentRootContentId,

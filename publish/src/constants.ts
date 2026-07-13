@@ -84,6 +84,15 @@ export const DEFAULT_POST_REUPLOAD_DELAY_MS = 60_000;
 /** Post-re-upload pause for --anchor-only (gateway verifies immediately after re-upload). */
 export const DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS = 0;
 
+/** Mainnet index-check delay before GraphQL verification (faster bundler indexing). */
+export const DEFAULT_MAINNET_FULL_INDEX_CHECK_DELAY_MS = 30_000;
+
+/** Mainnet pause after re-upload before polling GraphQL again. */
+export const DEFAULT_MAINNET_POST_REUPLOAD_DELAY_MS = 5_000;
+
+/** Default cap on total leaf re-uploads per index-check run on mainnet (--allow-reupload). */
+export const DEFAULT_MAINNET_MAX_REUPLOAD_LEAVES = 50;
+
 // Bundler URL policy aligned with Kargain lib/storage/irys-client.ts (irysNodeUrl).
 
 export function isBaseMainnetChainId(chainId: number): boolean {

@@ -113,7 +113,7 @@ describe('preflightGenesisPublish', () => {
           },
         },
       }),
-    ).rejects.toThrow(/Irys devnet uploader unavailable/);
+    ).rejects.toThrow(/Irys uploader unavailable/);
   });
 
   it('rejects when Irys GraphQL probe fails', async () => {

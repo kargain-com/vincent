@@ -140,24 +140,35 @@ cp publish/.env.example publish/.env   # fill in locally
 pnpm --filter @kargain/vincent-publish build
 
 # Auto: genesis if epochCount == 0, else incremental epoch N+1
-pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --fixture genesis-mini
+pnpm --filter @kargain/vincent-publish publish:epoch -- --network base-sepolia --fixture genesis-mini
+# alias: --devnet
 
 # Foundational genesis only (fail-closed on used publisher)
 pnpm --filter @kargain/vincent-publish publish:genesis -- --devnet --fixture genesis-mini
 # or: --full  (reads the full seed and verifies all 20 committed VIN fixtures)
 ```
 
+**Network flags** (required; mutually exclusive):
+
+| Flag | Chain |
+|------|-------|
+| `--network base-sepolia` or `--devnet` | Base Sepolia (84532) + Irys devnet |
+| `--network base` or `--mainnet` | Base mainnet (8453) + Irys mainnet bundler |
+
+Mainnet defaults: shorter index-check delays, **re-upload disabled** (use `--allow-reupload`; full seed caps at 50 leaves unless `--max-reupload-leaves=N`).
+
 Env vars:
 
 | Variable | Purpose |
 |----------|---------|
 | `VINCENT_GENESIS_PRIVATE_KEY` | Signs manifest; pays Irys devnet + Base Sepolia gas |
-| `BASE_SEPOLIA_RPC_URL` | Base Sepolia JSON-RPC for anchor registry **and** Irys `base-eth` uploads (same as Kargain) |
-| `IRYS_GATEWAY_URL` | Optional data gateway; defaults to `https://testnet-gateway.irys.xyz` for `--devnet`, else `https://gateway.irys.xyz` |
+| `BASE_SEPOLIA_RPC_URL` | Base Sepolia JSON-RPC (`--network base-sepolia` / `--devnet`) |
+| `BASE_MAINNET_RPC_URL` | Base mainnet JSON-RPC (`--network base` / `--mainnet`) |
+| `IRYS_GATEWAY_URL` | Optional data gateway; per-network default when unset (testnet vs mainnet) |
 | `IRYS_GRAPHQL_URL` | Optional tag-query endpoint; defaults to `https://uploader.irys.xyz/graphql` |
 | `VINCENT_IRYS_RECOVER_FUND_TX` | Optional Base Sepolia fund tx hash to register with Irys without sending a new payment |
 
-Commented Base mainnet vars (`BASE_MAINNET_RPC_URL`, mainnet gateway/bundler notes) are in [`.env.example`](.env.example) — scaffold only; the CLI still requires `--devnet`.
+Commented Base mainnet vars are in [`.env.example`](.env.example). Programmatic automation: `createIrysUploader({ chainId })`, `createRegistryPublisher({ chain })`, `resolvePublishNetwork`.
 
 Irys uses three different endpoints:
 

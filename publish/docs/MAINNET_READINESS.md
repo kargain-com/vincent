@@ -6,7 +6,7 @@ Living maintainer doc for `@kargain/vincent-publish` and Kargain integration. An
 
 **Architecture** — gateway-first verification, checkpoint v2, Merkle truth with GraphQL as discovery — is **mainnet-portable**. It is not a devnet workaround; devnet exposed indexing lag and the tooling was hardened accordingly.
 
-**Rails** — CLI `--devnet` gate, `createIrysDevnetUploader`, and `createBaseSepoliaPublisher` — are **testnet-only today**.
+**Rails** — CLI accepts `--network base-sepolia|base` (aliases `--devnet` / `--mainnet`); unified `createIrysUploader` / `createRegistryPublisher` are **dual-network**. Live mainnet genesis still requires P2 deploy.
 
 **Kargain** should validate on **Base Sepolia + Irys devnet** now. Foundational mainnet genesis is a separate founder step (deploy, economics, key retirement). See [PROTOCOL §8.1](../../docs/PROTOCOL.md) for foundational vs overlay publisher roles.
 
@@ -37,8 +37,8 @@ flowchart LR
 |------|---------------|------------------|--------|
 | Registry | Base Sepolia 84532, CREATE2 [`0x06667DB3795C70F34b7517D1Af1217D3167BE241`](../../docs/contracts/README.md) | Base 8453, same CREATE2 address | Sepolia deploy pending verify column |
 | Chain adapter | [`createRegistryPublisher`](../src/adapters/registry-publisher.ts) + Base Sepolia wrappers | `createRegistryPublisher({ chain: base, rpcUrl })` on 8453 | C2 + C3 env scaffold done |
-| Irys upload | [`createIrysDevnetUploader`](../src/adapters/irys-devnet-uploader.ts) + `devnet.irys.xyz` | Mainnet bundler + funding path | Not implemented |
-| Gateway | `--devnet` → `testnet-gateway.irys.xyz` | `gateway.irys.xyz` | Constants exist; CLI gated |
+| Irys upload | [`createIrysUploader`](../src/adapters/irys-uploader.ts) + `resolveIrysBundlerUrl` | Same (8453 → node2.irys.xyz) | P1 done |
+| Gateway | per-network default via `resolveIrysGatewayUrl` | `gateway.irys.xyz` | P1 done |
 | GraphQL | `uploader.irys.xyz/graphql` | Same | Shared |
 | SDK `getLeaf` | `createArweaveGetLeafWithUris`, `resolveLeafTxId`, `backfillLeafUrisFromGraphql`, `fetchLeafFromGateway` in `@kargain/vincent` 0.10.0 | Same | Done |
 | Publish API | Root exports: checkpoint, `verifyGenesisPublish`, `verifyUploadedLeaves`, backfill, Base Sepolia (B1) | + mainnet adapters when C lands | Testnet adapters exported |
@@ -72,10 +72,10 @@ flowchart LR
 - [x] **C1** — `BASE_MAINNET_CHAIN_ID`, `IRYS_MAINNET_BUNDLER_URL`, `resolveIrysBundlerUrl` in [`constants.ts`](../src/constants.ts) (Kargain `irysNodeUrl` aligned)
 - [x] **C2** — `createRegistryPublisher` / `createRegistryReader` with `createBaseSepoliaPublisher` backward-compatible alias
 - [x] **C3** — commented mainnet section in [`.env.example`](../.env.example)
-- [ ] Remove `--devnet` hard gate or add `--mainnet` path in [`publish-epoch` CLI](../src/cli/publish-epoch.ts)
-- [ ] `createIrysMainnetUploader` (real mainnet economics)
-- [ ] Re-upload cost guard (`--allow-reupload` / cap) for large epochs (~14k leaves)
-- [ ] Mainnet timing defaults (review `DEFAULT_FULL_INDEX_CHECK_DELAY_MS`, `DEFAULT_POST_REUPLOAD_DELAY_MS`)
+- [x] Remove `--devnet` hard gate; add `--network base-sepolia|base` with `--devnet` / `--mainnet` aliases
+- [x] Unified `createIrysUploader` / `createIrysClient` (chainId-driven; no separate mainnet module)
+- [x] Re-upload cost guard (`--allow-reupload`, `--max-reupload-leaves`, mainnet default cap 50 on full)
+- [x] Mainnet timing defaults (`DEFAULT_MAINNET_FULL_INDEX_CHECK_DELAY_MS`, `DEFAULT_MAINNET_POST_REUPLOAD_DELAY_MS`)
 
 ### P2 — founder / ops (outside repo automation)
 
@@ -91,11 +91,11 @@ flowchart LR
 |------|----------|------------|--------|
 | GraphQL query drift (publish vs SDK) | High | Consolidated in `@kargain/vincent/arweave` (A1) | Mitigated |
 | Publisher address case mismatch in GraphQL | Medium | `normalizePublisherAddress` (lowercase) in SDK | Mitigated |
-| Re-upload ×2 on ~14k leaves on mainnet | High | Cost guard / `--allow-reupload` (P1) | Open |
+| Re-upload ×2 on ~14k leaves on mainnet | High | Cost guard / `--allow-reupload` (P1) | Mitigated (opt-in re-upload) |
 | `leafUris` only in local checkpoint | Medium | Ops: backfill CLI; optional protocol sidecar (P2) | Accepted ops constraint |
 | v1 checkpoint without `leafUris` | Low | Auto stderr hint + `backfill:leaf-uris` (B2) | Mitigated |
 | `waitForLatestEpoch` default 6s polling | Low | Configurable `maxAttempts` / `delayMs` | Tunable |
-| Devnet-only CLI and upload rails | High | Phase C + mainnet Irys uploader (P1) | Open |
+| Devnet-only CLI and upload rails | High | P1 unified network profile | Mitigated |
 
 ## Kargain integration (testnet)
 

@@ -1,18 +1,17 @@
 import type { EpochBuild } from '@kargain/vincent-compiler';
-import { parseEther } from 'viem';
+import { parseEther, type Chain } from 'viem';
+import { baseSepolia } from 'viem/chains';
 import { gzipSync } from 'node:zlib';
 
 import { buildManifest } from './build-manifest.js';
-import { DEFAULT_GENESIS_REVIEW_POLICY } from './constants.js';
+import { BASE_SEPOLIA_CHAIN_ID, DEFAULT_GENESIS_REVIEW_POLICY } from './constants.js';
+import { createIrysClient, type IrysClientOptions } from './adapters/irys-client.js';
 import {
-  createIrysDevnetClient,
-  type IrysDevnetClientOptions,
-} from './adapters/irys-devnet-client.js';
-import {
-  fundIrysDevnetAccount,
+  fundIrysAccount,
   recoverIrysFundTransaction,
-  type IrysDevnetClient,
-} from './adapters/irys-devnet-fund.js';
+  type IrysClient,
+} from './adapters/irys-fund.js';
+import { resolvePublishNetwork, type PublishNetworkId } from './publish-network.js';
 
 const DEFAULT_COMPILER = { name: 'vincent-compiler', version: '0.0.1' } as const;
 const PLACEHOLDER_JSONL_URI = 'ar://placeholderplaceholderplaceholderplaceholderpl';
@@ -156,6 +155,9 @@ export interface EnsureIrysUploadBudgetOptions {
   byteSizes?: readonly number[];
   privateKeyHex: string;
   rpcUrl: string;
+  chainId?: number;
+  chain?: Chain;
+  networkId?: PublishNetworkId;
   epoch: EpochBuild;
   epochNumber: number;
   parentRootContentId: string | null;
@@ -168,15 +170,23 @@ export interface EnsureIrysUploadBudgetOptions {
   onFund?: (deficitWei: bigint) => void;
   /** Optional hook after quoting (e.g. CLI progress). */
   onQuote?: (quote: UploadBudgetQuote) => void;
-  /** When set, register this confirmed Sepolia fund tx before sending a new one. */
+  /** When set, register this confirmed fund tx before sending a new one. */
   recoverFundTxId?: `0x${string}`;
   onFundTxSubmitted?: (txId: `0x${string}`) => void;
-  fundIrysDevnetAccount?: (
-    irys: IrysDevnetClient,
+  fundIrysAccount?: (
+    irys: IrysClient,
     amountWei: bigint,
     rpcUrl: string,
   ) => Promise<void>;
-  irysClientFactory?: (options: IrysDevnetClientOptions) => Promise<IrysQuoteClient>;
+  irysClientFactory?: (options: IrysClientOptions) => Promise<IrysQuoteClient>;
+  /** @deprecated Use fundIrysAccount */
+  fundIrysDevnetAccount?: (
+    irys: IrysClient,
+    amountWei: bigint,
+    rpcUrl: string,
+  ) => Promise<void>;
+  /** @deprecated Use irysClientFactory with chainId */
+  irysDevnetClientFactory?: (options: IrysClientOptions) => Promise<IrysQuoteClient>;
 }
 
 export interface UploadBudgetQuote {
@@ -195,14 +205,17 @@ interface IrysQuoteClient {
   fund: (amount: string | number | bigint) => Promise<unknown>;
 }
 
-function formatUploadBudgetFailure(failure: UploadBudgetCheckFailure): string {
+function formatUploadBudgetFailure(
+  failure: UploadBudgetCheckFailure,
+  chainLabel: string,
+): string {
   return (
-    `Insufficient Base Sepolia / Irys upload budget: ` +
+    `Insufficient ${chainLabel} / Irys upload budget: ` +
     `quoted ${failure.estimatedCostWei.toString()} wei, ` +
     `need ${failure.requiredWei.toString()} wei on Irys (funded ${failure.irysLoadedBalanceWei.toString()} wei), ` +
     `wallet must cover ${failure.walletNeededWei.toString()} wei to fund the ${failure.deficitWei.toString()} wei deficit ` +
     `(includes ${failure.fundingReserveWei.toString()} wei gas reserve) but have ${failure.walletBalanceWei.toString()} wei. ` +
-    `Fund the publisher on Base Sepolia before publishing.`
+    `Fund the publisher on ${chainLabel} before publishing.`
   );
 }
 
@@ -217,6 +230,14 @@ async function readLoadedBalanceWei(
 export async function ensureIrysUploadBudget(
   options: EnsureIrysUploadBudgetOptions,
 ): Promise<void> {
+  const network =
+    options.networkId !== undefined
+      ? resolvePublishNetwork(options.networkId)
+      : undefined;
+  const chainId = options.chainId ?? network?.chainId ?? BASE_SEPOLIA_CHAIN_ID;
+  const chain = options.chain ?? network?.chain ?? baseSepolia;
+  const chainLabel = chain.name ?? `chain ${String(chainId)}`;
+
   const byteSizes =
     options.byteSizes ??
     computeEpochUploadByteSizes(
@@ -225,13 +246,18 @@ export async function ensureIrysUploadBudget(
       options.parentRootContentId,
     );
 
-  const irysClientFactory = options.irysClientFactory ?? createIrysDevnetClient;
+  const irysClientFactory =
+    options.irysClientFactory ??
+    options.irysDevnetClientFactory ??
+    ((clientOptions: IrysClientOptions) =>
+      createIrysClient({ ...clientOptions, chainId }));
   const needsIrysClient =
     options.estimateUploadCostWei === undefined || options.getIrysLoadedBalance === undefined;
 
   let irys: IrysQuoteClient | undefined;
   if (needsIrysClient) {
     irys = await irysClientFactory({
+      chainId,
       privateKeyHex: options.privateKeyHex,
       rpcUrl: options.rpcUrl,
     });
@@ -273,7 +299,7 @@ export async function ensureIrysUploadBudget(
   });
 
   if (!initialCheck.ok) {
-    throw new Error(formatUploadBudgetFailure(initialCheck));
+    throw new Error(formatUploadBudgetFailure(initialCheck, chainLabel));
   }
 
   if (irysLoadedBalanceWei >= requiredWei) {
@@ -283,11 +309,13 @@ export async function ensureIrysUploadBudget(
   if (options.recoverFundTxId !== undefined) {
     if (irys === undefined) {
       irys = await irysClientFactory({
+        chainId,
         privateKeyHex: options.privateKeyHex,
         rpcUrl: options.rpcUrl,
       });
     }
-    await recoverIrysFundTransaction(irys as IrysDevnetClient, options.recoverFundTxId, options.rpcUrl, {
+    await recoverIrysFundTransaction(irys as IrysClient, options.recoverFundTxId, options.rpcUrl, {
+      chain,
       readLoadedBalance: readLoaded,
       requiredLoadedWei: requiredWei,
     });
@@ -305,18 +333,23 @@ export async function ensureIrysUploadBudget(
   } else {
     if (irys === undefined) {
       irys = await irysClientFactory({
+        chainId,
         privateKeyHex: options.privateKeyHex,
         rpcUrl: options.rpcUrl,
       });
     }
-    const fundAccount = options.fundIrysDevnetAccount ?? (async (client, amountWei, rpcUrl) => {
-      await fundIrysDevnetAccount(client, amountWei, rpcUrl, {
-        onTxSubmitted: options.onFundTxSubmitted,
-        readLoadedBalance: readLoaded,
-        requiredLoadedWei: requiredWei,
+    const fundAccount =
+      options.fundIrysAccount ??
+      options.fundIrysDevnetAccount ??
+      (async (client, amountWei, rpcUrl) => {
+        await fundIrysAccount(client, amountWei, rpcUrl, {
+          chain,
+          onTxSubmitted: options.onFundTxSubmitted,
+          readLoadedBalance: readLoaded,
+          requiredLoadedWei: requiredWei,
+        });
       });
-    });
-    await fundAccount(irys as IrysDevnetClient, fundDeficitWei, options.rpcUrl);
+    await fundAccount(irys as IrysClient, fundDeficitWei, options.rpcUrl);
   }
 
   irysLoadedBalanceWei = await readLoaded();

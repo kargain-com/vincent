@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 
-import { BASE_SEPOLIA_CHAIN_ID, IRYS_UPLOAD_MAX_ATTEMPTS } from '../constants.js';
+import { IRYS_UPLOAD_MAX_ATTEMPTS } from '../constants.js';
 import { createIrysClient } from './irys-client.js';
 import { withIrysUploadRetries } from './irys-upload-retry.js';
 import type { UploadResult, UploadTag, Uploader as VincentUploader } from './types.js';
@@ -36,15 +36,4 @@ export async function createIrysUploader(
       return { id: receipt.id, uri: `ar://${receipt.id}` };
     },
   };
-}
-
-export interface IrysDevnetClientOptions {
-  privateKeyHex: string;
-  rpcUrl: string;
-  timeoutMs?: number;
-}
-
-/** @deprecated Use {@link createIrysClient} with chainId 84532. */
-export async function createIrysDevnetClient(options: IrysDevnetClientOptions) {
-  return createIrysClient({ ...options, chainId: BASE_SEPOLIA_CHAIN_ID });
 }

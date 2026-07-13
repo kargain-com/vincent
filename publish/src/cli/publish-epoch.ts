@@ -13,23 +13,22 @@ import {
 } from '@kargain/vincent/protocol';
 import { formatEther } from 'viem';
 
-import { createBaseSepoliaPublisher, createBaseSepoliaReader } from '../adapters/base-sepolia-publisher.js';
-import { createIrysDevnetUploader } from '../adapters/irys-devnet-uploader.js';
-import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL, IRYS_TESTNET_GATEWAY_URL } from '../constants.js';
+import { createRegistryPublisher, createRegistryReader } from '../adapters/registry-publisher.js';
+import { createIrysUploader } from '../adapters/irys-uploader.js';
+import { IRYS_GRAPHQL_URL } from '../constants.js';
 import { loadFullSeedClaims } from '../load-full-seed-claims.js';
 import { preflightEpochPublish } from '../preflight-genesis-publish.js';
 import {
-  DEFAULT_ANCHOR_ONLY_INDEX_CHECK_MAX_REUPLOADS,
-  DEFAULT_ANCHOR_ONLY_INDEX_CHECK_TIMEOUT_MS,
-  DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS,
-  DEFAULT_FULL_INDEX_CHECK_CONCURRENCY,
-  DEFAULT_FULL_INDEX_CHECK_DELAY_MS,
   DEFAULT_FULL_INDEX_CHECK_LOG_INTERVAL,
-  DEFAULT_FULL_INDEX_CHECK_MAX_REUPLOADS,
-  DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS,
   DEFAULT_FULL_UPLOAD_CONCURRENCY,
-  DEFAULT_POST_REUPLOAD_DELAY_MS,
 } from '../constants.js';
+import { parseNetworkFlags } from './parse-network-flags.js';
+import {
+  resolveIndexCheckDefaults,
+  resolveIrysGatewayUrl,
+  resolvePublishNetwork,
+  type PublishNetworkId,
+} from '../publish-network.js';
 import {
   failedLeafKeySet,
   loadCheckpoint,
@@ -45,7 +44,7 @@ import {
 import { resolveEpochParent } from '../resolve-epoch-parent.js';
 import { manifestHash } from '../sign-manifest.js';
 import {
-  assertBaseSepoliaRpcUrl,
+  assertJsonRpcUrl,
   assertIrysGraphqlUrl,
 } from '../validate-env-urls.js';
 import { verifyGenesisPublish } from '../verify-genesis-publish.js';
@@ -62,13 +61,15 @@ function writeCliHint(message: string): void {
 }
 
 interface CliOptions {
-  devnet: boolean;
+  network: PublishNetworkId;
   genesis: boolean;
   fixture: 'genesis-mini' | 'full';
   verifyOnly: boolean;
   uploadOnly: boolean;
   anchorOnly: boolean;
   retryFailed: boolean;
+  allowReupload: boolean;
+  maxReuploadLeaves?: number;
   uploadConcurrency?: number;
   indexCheckConcurrency?: number;
   indexCheckDelayMs?: number;
@@ -79,12 +80,13 @@ interface CliOptions {
 }
 
 function parseArgs(argv: string[]): CliOptions {
-  const devnet = argv.includes('--devnet');
+  const network = parseNetworkFlags(argv);
   const genesis = argv.includes('--genesis');
   const verifyOnly = argv.includes('--verify-only');
   const uploadOnly = argv.includes('--upload-only');
   const anchorOnly = argv.includes('--anchor-only');
   const retryFailed = argv.includes('--retry-failed');
+  const allowReupload = argv.includes('--allow-reupload');
   const fixtureArg = argv.find((arg) => arg.startsWith('--fixture='));
   const fixtureFlagIndex = argv.indexOf('--fixture');
   const publisherArg = argv.find((arg) => arg.startsWith('--publisher='));
@@ -175,6 +177,21 @@ function parseArgs(argv: string[]): CliOptions {
     throw new Error('--index-check-timeout must be a positive integer (milliseconds)');
   }
 
+  const maxReuploadLeavesArg = argv.find((arg) => arg.startsWith('--max-reupload-leaves='));
+  const maxReuploadLeavesFlagIndex = argv.indexOf('--max-reupload-leaves');
+  let maxReuploadLeaves: number | undefined;
+  if (maxReuploadLeavesArg !== undefined) {
+    maxReuploadLeaves = Number(maxReuploadLeavesArg.slice('--max-reupload-leaves='.length));
+  } else if (maxReuploadLeavesFlagIndex >= 0) {
+    maxReuploadLeaves = Number(argv[maxReuploadLeavesFlagIndex + 1]);
+  }
+  if (
+    maxReuploadLeaves !== undefined &&
+    (!Number.isInteger(maxReuploadLeaves) || maxReuploadLeaves < 0)
+  ) {
+    throw new Error('--max-reupload-leaves must be a non-negative integer');
+  }
+
   const checkpointArg = argv.find((arg) => arg.startsWith('--checkpoint-file='));
   const checkpointFlagIndex = argv.indexOf('--checkpoint-file');
   let checkpointFile = join(PUBLISH_ROOT, '.vincent-publish-checkpoint.json');
@@ -199,13 +216,15 @@ function parseArgs(argv: string[]): CliOptions {
   }
 
   return {
-    devnet,
+    network,
     genesis,
     fixture,
     verifyOnly,
     uploadOnly,
     anchorOnly,
     retryFailed,
+    allowReupload,
+    maxReuploadLeaves,
     uploadConcurrency,
     indexCheckConcurrency,
     indexCheckDelayMs,
@@ -227,14 +246,6 @@ function requireEnv(name: string): string {
 function optionalEnv(name: string, fallback: string): string {
   const value = process.env[name];
   return value === undefined || value.length === 0 ? fallback : value;
-}
-
-function resolveIrysGatewayUrl(devnet: boolean): string {
-  const configured = process.env.IRYS_GATEWAY_URL;
-  if (configured !== undefined && configured.length > 0) {
-    return configured;
-  }
-  return devnet ? IRYS_TESTNET_GATEWAY_URL : IRYS_GATEWAY_URL;
 }
 
 function optionalFundTxId(): `0x${string}` | undefined {
@@ -284,18 +295,22 @@ async function fetchManifestFromGateway(
 async function runVerifyOnly(options: CliOptions): Promise<void> {
   if (options.publisher === undefined || options.manifestUri === undefined) {
     throw new Error(
-      'Usage: publish-epoch --devnet --verify-only --publisher <address> --manifest-uri ar://...',
+      'Usage: publish-epoch --network base-sepolia|--devnet --verify-only --publisher <address> --manifest-uri ar://...',
     );
   }
 
-  const rpcUrl = requireEnv('BASE_SEPOLIA_RPC_URL');
-  assertBaseSepoliaRpcUrl(rpcUrl, 'BASE_SEPOLIA_RPC_URL');
-  const irysGatewayUrl = resolveIrysGatewayUrl(options.devnet);
+  const profile = resolvePublishNetwork(options.network);
+  const rpcUrl = requireEnv(profile.rpcEnvVar);
+  assertJsonRpcUrl(rpcUrl, profile.rpcEnvVar);
+  const irysGatewayUrl = resolveIrysGatewayUrl(
+    profile.chainId,
+    process.env.IRYS_GATEWAY_URL,
+  );
   const irysGraphqlUrl = optionalEnv('IRYS_GRAPHQL_URL', IRYS_GRAPHQL_URL);
   assertIrysGraphqlUrl(irysGraphqlUrl, 'IRYS_GRAPHQL_URL');
   const publisher = toChecksumAddress(options.publisher);
 
-  const chainPublisher = createBaseSepoliaReader({ rpcUrl });
+  const chainPublisher = createRegistryReader({ chain: profile.chain, rpcUrl });
 
   process.stdout.write(`Verify-only for publisher: ${publisher}\n`);
   process.stdout.write(`Manifest URI: ${options.manifestUri}\n`);
@@ -406,7 +421,7 @@ function createPublishProgressLogger(leafLogInterval: number, indexCheckLogInter
       }
       case 'anchor':
         if (progress.completed === 0) {
-          process.stdout.write('Anchoring on Base Sepolia...\n');
+          process.stdout.write('Anchoring on chain...\n');
         }
         return;
       default:
@@ -416,20 +431,32 @@ function createPublishProgressLogger(leafLogInterval: number, indexCheckLogInter
 }
 
 async function runPublish(options: CliOptions): Promise<void> {
+  const profile = resolvePublishNetwork(options.network);
   const privateKey = normalizePrivateKey(requireEnv('VINCENT_GENESIS_PRIVATE_KEY'));
-  const rpcUrl = requireEnv('BASE_SEPOLIA_RPC_URL');
-  assertBaseSepoliaRpcUrl(rpcUrl, 'BASE_SEPOLIA_RPC_URL');
-  const irysGatewayUrl = resolveIrysGatewayUrl(options.devnet);
+  const rpcUrl = requireEnv(profile.rpcEnvVar);
+  assertJsonRpcUrl(rpcUrl, profile.rpcEnvVar);
+  const irysGatewayUrl = resolveIrysGatewayUrl(
+    profile.chainId,
+    process.env.IRYS_GATEWAY_URL,
+  );
   const irysGraphqlUrl = optionalEnv('IRYS_GRAPHQL_URL', IRYS_GRAPHQL_URL);
   assertIrysGraphqlUrl(irysGraphqlUrl, 'IRYS_GRAPHQL_URL');
   const publisher = toChecksumAddress(addressFromPrivateKey(privateKey));
+  const chainLabel = profile.chain.name ?? profile.id;
 
-  const chainPublisher = createBaseSepoliaPublisher({
+  const chainPublisher = createRegistryPublisher({
     privateKeyHex: privateKey,
+    chain: profile.chain,
     rpcUrl,
   });
 
-  const preflightOptions = { rpcUrl, irysGraphqlUrl };
+  const preflightOptions = {
+    rpcUrl,
+    irysGraphqlUrl,
+    chainId: profile.chainId,
+    chain: profile.chain,
+    networkId: profile.id,
+  };
   const resolved = await resolveEpochParent(chainPublisher, publisher as `0x${string}`);
   const mode =
     resolved.epochNumber === 1
@@ -519,19 +546,19 @@ async function runPublish(options: CliOptions): Promise<void> {
             `Irys quote: ${formatEther(quote.estimatedCostWei)} ETH ` +
               `(need ${formatEther(quote.requiredWei)} ETH on Irys, ` +
               `funded ${formatEther(quote.irysLoadedBalanceWei)} ETH, ` +
-              `Base Sepolia wallet ${formatEther(quote.walletBalanceWei)} ETH` +
+              `${chainLabel} wallet ${formatEther(quote.walletBalanceWei)} ETH` +
               (quote.deficitWei > 0n ? `, fund ${formatEther(quote.deficitWei)} ETH` : '') +
               `)\n`,
           );
         },
         onFund: (deficitWei: bigint) => {
           process.stdout.write(
-            `Funding Irys account with ${deficitWei.toString()} wei from Base Sepolia...\n`,
+            `Funding Irys account with ${deficitWei.toString()} wei from ${chainLabel}...\n`,
           );
         },
         onFundTxSubmitted: (txId: `0x${string}`) => {
           process.stdout.write(
-            `Submitted Irys fund tx ${txId}; waiting for Base Sepolia confirmation...\n`,
+            `Submitted Irys fund tx ${txId}; waiting for ${chainLabel} confirmation...\n`,
           );
         },
       };
@@ -555,7 +582,8 @@ async function runPublish(options: CliOptions): Promise<void> {
     },
   });
 
-  const uploader = await createIrysDevnetUploader({
+  const uploader = await createIrysUploader({
+    chainId: profile.chainId,
     privateKeyHex: privateKey,
     rpcUrl,
     onUploadRetry: ({ attempt, maxAttempts, error }) => {
@@ -564,6 +592,14 @@ async function runPublish(options: CliOptions): Promise<void> {
         `Irys upload retry ${String(attempt)}/${String(maxAttempts)} (${detail})\n`,
       );
     },
+  });
+
+  const indexDefaults = resolveIndexCheckDefaults(profile, options.fixture, options.anchorOnly, {
+    indexCheckConcurrency: options.indexCheckConcurrency,
+    indexCheckDelayMs: options.indexCheckDelayMs,
+    indexCheckTimeoutMs: options.indexCheckTimeoutMs,
+    allowReupload: options.allowReupload ? true : undefined,
+    maxReuploadLeaves: options.maxReuploadLeaves,
   });
 
   const phaseLabel = options.retryFailed
@@ -601,30 +637,13 @@ async function runPublish(options: CliOptions): Promise<void> {
     leafIndexCheck: {
       gatewayUrl: irysGatewayUrl,
       graphqlUrl: irysGraphqlUrl,
-      timeoutMs:
-        options.indexCheckTimeoutMs ??
-        (options.anchorOnly
-          ? DEFAULT_ANCHOR_ONLY_INDEX_CHECK_TIMEOUT_MS
-          : options.fixture === 'full'
-            ? DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS
-            : undefined),
-      delayMs:
-        options.indexCheckDelayMs ??
-        (options.anchorOnly
-          ? 0
-          : options.fixture === 'full'
-            ? DEFAULT_FULL_INDEX_CHECK_DELAY_MS
-            : undefined),
-      concurrency:
-        options.indexCheckConcurrency ??
-        (options.fixture === 'full' ? DEFAULT_FULL_INDEX_CHECK_CONCURRENCY : undefined),
-      maxReuploadAttempts: options.anchorOnly
-        ? DEFAULT_ANCHOR_ONLY_INDEX_CHECK_MAX_REUPLOADS
-        : DEFAULT_FULL_INDEX_CHECK_MAX_REUPLOADS,
-      postReuploadDelayMs: options.anchorOnly
-        ? DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS
-        : DEFAULT_POST_REUPLOAD_DELAY_MS,
-      reuploadOnFailure: true,
+      timeoutMs: indexDefaults.timeoutMs,
+      delayMs: indexDefaults.delayMs,
+      concurrency: indexDefaults.concurrency,
+      maxReuploadAttempts: indexDefaults.maxReuploadAttempts,
+      postReuploadDelayMs: indexDefaults.postReuploadDelayMs,
+      reuploadOnFailure: indexDefaults.reuploadOnFailure,
+      maxReuploadLeaves: indexDefaults.maxReuploadLeaves,
       gatewayFallback: true,
       skipGraphqlPoll: true,
       onDelay: (delayMs) => {
@@ -656,9 +675,7 @@ async function runPublish(options: CliOptions): Promise<void> {
   process.stdout.write(`manifestUri: ${report.manifestUri}\n`);
   process.stdout.write(`manifestHash: ${report.manifestHash}\n`);
   process.stdout.write(`txHash: ${report.txHash}\n`);
-  process.stdout.write(
-    `explorer: https://sepolia.basescan.org/tx/${report.txHash}\n`,
-  );
+  process.stdout.write(`explorer: ${profile.explorerTxUrl}${report.txHash}\n`);
 
   let ok = true;
 
@@ -687,11 +704,6 @@ async function runPublish(options: CliOptions): Promise<void> {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  if (!options.devnet) {
-    throw new Error(
-      'Usage: publish-epoch --devnet [--genesis] [--fixture genesis-mini|full] [--upload-only|--anchor-only|--retry-failed] [--index-check-concurrency=N] [--index-check-delay=MS] [--index-check-timeout=MS] | --verify-only --publisher <addr> --manifest-uri ar://...',
-    );
-  }
 
   if (options.verifyOnly) {
     await runVerifyOnly(options);

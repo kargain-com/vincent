@@ -53,4 +53,10 @@ describe('publish entry re-exports', () => {
     expect(publishEntry.resolveIrysBundlerUrl).toBe(constantsModule.resolveIrysBundlerUrl);
     expect(publishEntry.BASE_MAINNET_CHAIN_ID).toBe(8453);
   });
+
+  it('exposes unified Irys uploader from the package root', () => {
+    expect(typeof publishEntry.createIrysUploader).toBe('function');
+    expect(typeof publishEntry.createIrysClient).toBe('function');
+    expect(typeof publishEntry.resolvePublishNetwork).toBe('function');
+  });
 });

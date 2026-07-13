@@ -292,7 +292,7 @@ export function formatLeafUriBackfillHint(checkpoint: PublishCheckpoint): string
   return (
     `Checkpoint has ${String(count)} index-verified leaves but no leafUris ` +
     `(v1 migration or missing backfill). Run: ` +
-    `pnpm --filter @kargain/vincent-publish backfill:leaf-uris -- --devnet --epoch ${String(epoch)}`
+    `pnpm --filter @kargain/vincent-publish backfill:leaf-uris -- --network base-sepolia --epoch ${String(epoch)}`
   );
 }
 
