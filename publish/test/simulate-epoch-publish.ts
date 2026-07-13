@@ -20,6 +20,7 @@ import {
   type VerifyGenesisPublishResult,
 } from '../src/verify-genesis-publish.js';
 import { loadGenesisMiniEpoch2Claims } from './helpers.js';
+import { testCheckpointPath } from './helpers.js';
 import { createMockChainPublisher } from './mock-chain-publisher.js';
 import { createMockIrysGateway } from './mock-irys-gateway.js';
 import { createLiveMockIrysFetchImpl } from './live-mock-irys-fetch.js';
@@ -104,6 +105,7 @@ export async function simulateEpoch2MiniPublish(
     signerKeyHex,
     uploader,
     chainPublisher,
+    checkpointPath: testCheckpointPath(),
     preflight: { ...preflight, targetEpochNumber: 2 },
     leafIndexCheck: {
       gatewayUrl: liveGateway.gatewayUrl,
@@ -123,6 +125,7 @@ export async function simulateEpoch2MiniPublish(
   const verification = await verifyGenesisPublish({
     report,
     chainPublisher,
+    checkpointPath: testCheckpointPath(),
     gatewayUrl,
     graphqlUrl,
     fixture: 'genesis-mini',

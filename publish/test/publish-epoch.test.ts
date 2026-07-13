@@ -5,10 +5,18 @@ import { parseEther } from 'viem';
 import { describe, expect, it, vi } from 'vitest';
 
 import { sha256ContentIdToBytes32, ZERO_BYTES32 } from '../src/adapters/sha256-bytes32.js';
+import {
+  createEmptyCheckpoint,
+  loadCheckpoint,
+  markLeafIndexVerified,
+  markLeafUploaded,
+  saveCheckpoint,
+} from '../src/publish-checkpoint.js';
 import { publishEpoch, publishGenesis, TEST_PRIVATE_KEY, TEST_PUBLISHER } from '../src/index.js';
 import {
   loadGenesisMiniClaims,
   loadGenesisMiniEpoch2Claims,
+  testCheckpointPath,
   VIN_PLANT,
 } from './helpers.js';
 import { createMockChainPublisher } from './mock-chain-publisher.js';
@@ -31,6 +39,7 @@ describe('publishEpoch offline mock e2e', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     expect(report.manifest.epoch).toBe(1);
@@ -59,6 +68,7 @@ describe('publishEpoch offline mock e2e', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     const epoch2Uploader = createMockUploader();
@@ -67,6 +77,7 @@ describe('publishEpoch offline mock e2e', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader: epoch2Uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     expect(epoch2Report.manifest.epoch).toBe(2);
@@ -130,30 +141,25 @@ describe('publishEpoch offline mock e2e', () => {
     expect(uploadSpy).not.toHaveBeenCalled();
   });
 
-  it('resumes leaf uploads when leaves are already indexed', async () => {
+  it('resumes leaf uploads when checkpoint marks leaves complete', async () => {
     const claims = loadGenesisMiniClaims();
     const built = compile(claims, {});
     if (!built.ok) {
       throw new Error(built.error.message);
     }
 
-    const seedUploader = createMockUploader();
+    const checkpointPath = testCheckpointPath();
+    let checkpoint = createEmptyCheckpoint({
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      merkleRoot: built.value.merkleRoot,
+      jsonlSha256: built.value.jsonlSha256,
+    });
     const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
-    for (const [leafKey, entry] of sortedLeaves) {
-      await seedUploader.upload(
-        new TextEncoder().encode(
-          JSON.stringify({ leaf: entry.leaf, proof: entry.proof }),
-        ),
-        [
-          { name: 'App', value: 'vincent' },
-          { name: 'Epoch', value: '1' },
-          { name: 'LeafKey', value: leafKey },
-        ],
-      );
+    for (const [leafKey] of sortedLeaves) {
+      checkpoint = markLeafUploaded(checkpoint, leafKey, `ar://seed-${leafKey}`);
     }
-
-    const gatewayItems = uploaderStoreToGatewayItems(seedUploader.records, TEST_PUBLISHER, 1);
-    const { gatewayUrl, graphqlUrl, fetchImpl } = createMockGateway(gatewayItems);
+    saveCheckpoint(checkpointPath, checkpoint);
 
     const uploader = createMockUploader();
     const uploadSpy = vi.spyOn(uploader, 'upload');
@@ -164,15 +170,197 @@ describe('publishEpoch offline mock e2e', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath,
+    });
+
+    expect(uploadSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('anchor-only skips leaf uploads when checkpoint is complete', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const seedUploader = createMockUploader();
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    for (const [leafKey, entry] of sortedLeaves) {
+      await seedUploader.upload(
+        new TextEncoder().encode(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })),
+        [
+          { name: 'App', value: 'vincent' },
+          { name: 'Epoch', value: '1' },
+          { name: 'LeafKey', value: leafKey },
+        ],
+      );
+    }
+    const jsonlUpload = await seedUploader.upload(
+      new TextEncoder().encode('{}'),
+      [
+        { name: 'App', value: 'vincent' },
+        { name: 'Epoch', value: '1' },
+        { name: 'Type', value: 'jsonl' },
+      ],
+    );
+    const manifestUpload = await seedUploader.upload(
+      new TextEncoder().encode('{}'),
+      [
+        { name: 'App', value: 'vincent' },
+        { name: 'Epoch', value: '1' },
+        { name: 'Type', value: 'manifest' },
+      ],
+    );
+
+    const checkpointPath = testCheckpointPath();
+    let checkpoint = createEmptyCheckpoint({
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      merkleRoot: built.value.merkleRoot,
+      jsonlSha256: built.value.jsonlSha256,
+    });
+    for (const [leafKey] of sortedLeaves) {
+      checkpoint = markLeafUploaded(checkpoint, leafKey);
+      checkpoint = markLeafIndexVerified(checkpoint, leafKey);
+    }
+    checkpoint = {
+      ...checkpoint,
+      jsonlUri: jsonlUpload.uri,
+      manifestUri: manifestUpload.uri,
+    };
+    saveCheckpoint(checkpointPath, checkpoint);
+
+    const gatewayItems = uploaderStoreToGatewayItems(seedUploader.records, TEST_PUBLISHER, 1);
+    const { gatewayUrl, graphqlUrl, fetchImpl } = createMockGateway(gatewayItems);
+
+    const uploader = createMockUploader();
+    const uploadSpy = vi.spyOn(uploader, 'upload');
+    const chainPublisher = createMockChainPublisher();
+
+    const report = await publishEpoch({
+      epoch: built.value,
+      signerKeyHex: TEST_PRIVATE_KEY,
+      uploader,
+      chainPublisher,
+      checkpointPath,
+      phases: {
+        uploadLeaves: false,
+        uploadArtifacts: false,
+      },
       leafIndexCheck: {
         gatewayUrl,
         graphqlUrl,
         fetchImpl,
-        resumeBeforeUpload: true,
+        pollIntervalMs: 0,
+        sleep: async () => {},
       },
     });
 
-    expect(uploadSpy).toHaveBeenCalledTimes(2);
+    expect(uploadSpy).not.toHaveBeenCalled();
+    expect(report.txHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(chainPublisher.calls).toHaveLength(1);
+  });
+
+  it('retry-failed uploads only failedLeafKeys and clears them', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const failedKeys = sortedLeaves.slice(0, 2).map(([leafKey]) => leafKey);
+
+    const checkpointPath = testCheckpointPath();
+    let checkpoint = createEmptyCheckpoint({
+      publisher: TEST_PUBLISHER,
+      epochNumber: 1,
+      merkleRoot: built.value.merkleRoot,
+      jsonlSha256: built.value.jsonlSha256,
+    });
+    for (const [leafKey] of sortedLeaves) {
+      checkpoint = markLeafUploaded(checkpoint, leafKey);
+    }
+    checkpoint = {
+      ...checkpoint,
+      failedLeafKeys: [...failedKeys],
+      jsonlUri: 'ar://jsonl',
+      manifestUri: 'ar://manifest',
+    };
+    saveCheckpoint(checkpointPath, checkpoint);
+
+    const uploader = createMockUploader();
+    const chainPublisher = createMockChainPublisher();
+
+    await publishEpoch({
+      epoch: built.value,
+      signerKeyHex: TEST_PRIVATE_KEY,
+      uploader,
+      chainPublisher,
+      checkpointPath,
+      uploadScope: 'failed-only',
+      phases: {
+        uploadArtifacts: false,
+        indexCheck: false,
+        anchor: false,
+      },
+    });
+
+    const uploadedLeafKeys = uploader.records
+      .map((record) => record.tags.find((tag) => tag.name === 'LeafKey')?.value)
+      .filter((value): value is string => value !== undefined);
+    expect(uploadedLeafKeys.sort()).toEqual([...failedKeys].sort());
+    expect(chainPublisher.calls).toHaveLength(0);
+
+    const saved = loadCheckpoint(checkpointPath);
+    expect(saved?.failedLeafKeys).toEqual([]);
+    for (const leafKey of failedKeys) {
+      expect(saved?.leafUris[leafKey]).toMatch(/^ar:\/\//);
+    }
+  });
+
+  it('blocks anchor and records failedLeafKeys when index-check fails', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const uploader = createMockUploader();
+    const chainPublisher = createMockChainPublisher();
+    const checkpointPath = testCheckpointPath();
+
+    const emptyGraphqlFetch: typeof fetch = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: { transactions: { edges: [] } } }), {
+          status: 200,
+        }),
+      );
+
+    await expect(
+      publishEpoch({
+        epoch: built.value,
+        signerKeyHex: TEST_PRIVATE_KEY,
+        uploader,
+        chainPublisher,
+        checkpointPath,
+        leafIndexCheck: {
+          gatewayUrl: 'https://mock.gateway.irys.test',
+          graphqlUrl: 'https://mock.uploader.irys.test/graphql',
+          fetchImpl: emptyGraphqlFetch,
+          timeoutMs: 0,
+          pollIntervalMs: 0,
+          sleep: async () => {},
+        },
+      }),
+    ).rejects.toThrow(/Index-check failed for \d+ of \d+ leaves.*--retry-failed/s);
+
+    expect(chainPublisher.calls).toHaveLength(0);
+
+    const saved = loadCheckpoint(checkpointPath);
+    expect(saved?.failedLeafKeys.sort()).toEqual(
+      [...built.value.leaves.keys()].sort(),
+    );
   });
 
   it('publishGenesis wrapper sets requireGenesis', async () => {

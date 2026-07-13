@@ -9,6 +9,7 @@ import { createMockChainPublisher } from './mock-chain-publisher.js';
 import { createMockIrysGateway } from './mock-irys-gateway.js';
 import { createMockUploader } from './mock-uploader.js';
 import { loadGenesisMiniClaims } from './helpers.js';
+import { testCheckpointPath } from './helpers.js';
 import { simulateGenesisMiniPublish, mockPreflightOverrides } from './simulate-genesis-publish.js';
 
 describe('genesis publish full offline simulation', () => {
@@ -42,6 +43,7 @@ describe('genesis publish full offline simulation', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
       preflight: mockPreflightOverrides(),
     });
 
@@ -125,6 +127,7 @@ describe('genesis publish full offline simulation', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
       preflight: mockPreflightOverrides(),
     });
 

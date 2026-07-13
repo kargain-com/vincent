@@ -2,10 +2,15 @@ import type { EpochBuild } from '@kargain/vincent-compiler';
 
 import type { ChainPublisher, PublishGenesisReport } from './adapters/types.js';
 import type { GenesisPreflightOptions } from './preflight-genesis-publish.js';
-import { publishEpoch, type LeafIndexCheckOptions, type PublishEpochDeps } from './publish-epoch.js';
+import {
+  publishEpoch,
+  type LeafIndexCheckOptions,
+  type PublishEpochDeps,
+  type PublishEpochPhases,
+} from './publish-epoch.js';
 import type { EpochChainReader } from './resolve-epoch-parent.js';
 
-export type { LeafIndexCheckOptions } from './publish-epoch.js';
+export type { LeafIndexCheckOptions, PublishEpochPhases } from './publish-epoch.js';
 
 export interface PublishGenesisDeps {
   epoch: EpochBuild;
@@ -17,6 +22,11 @@ export interface PublishGenesisDeps {
   preflight?: GenesisPreflightOptions;
   /** When set, verify GraphQL leaf indexing before on-chain anchor. */
   leafIndexCheck?: LeafIndexCheckOptions;
+  phases?: PublishEpochPhases;
+  uploadConcurrency?: number;
+  checkpointPath?: string;
+  onProgress?: PublishEpochDeps['onProgress'];
+  onCheckpointLoaded?: PublishEpochDeps['onCheckpointLoaded'];
 }
 
 /** Genesis publish (epoch 1 only, fail-closed when publisher already has epochs). */

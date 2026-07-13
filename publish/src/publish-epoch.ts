@@ -1,5 +1,4 @@
 import type { EpochBuild } from '@kargain/vincent-compiler';
-import { createArweaveGetLeaf } from '@kargain/vincent/arweave';
 import { addressFromPrivateKey, toChecksumAddress } from '@kargain/vincent/protocol';
 import { gzipSync } from 'node:zlib';
 
@@ -7,20 +6,37 @@ import type { ChainPublisher, PublishGenesisReport, UploadTag, Uploader } from '
 import { sha256ContentIdToBytes32 } from './adapters/sha256-bytes32.js';
 import { assertGenesisPublisherAvailable } from './assert-genesis-publisher.js';
 import { buildManifest } from './build-manifest.js';
-import { DEFAULT_GENESIS_REVIEW_POLICY } from './constants.js';
+import {
+  DEFAULT_FULL_UPLOAD_CONCURRENCY,
+  DEFAULT_GENESIS_REVIEW_POLICY,
+} from './constants.js';
 import {
   preflightEpochPublish,
   type EpochPreflightOptions,
 } from './preflight-genesis-publish.js';
+import {
+  loadOrCreateCheckpoint,
+  saveCheckpoint,
+  updateCheckpointUris,
+  type PublishCheckpoint,
+} from './publish-checkpoint.js';
 import { resolveEpochParent, type EpochChainReader } from './resolve-epoch-parent.js';
+import { resolveUploadedArtifactUri } from './resolve-uploaded-artifact.js';
 import { manifestHash, signManifest } from './sign-manifest.js';
-import { isLeafAlreadyUploaded } from './resolve-uploaded-leaf.js';
+import { uploadEpochLeaves } from './upload-epoch-leaves.js';
 import {
   verifyUploadedLeaves,
   type VerifyUploadedLeavesOptions,
 } from './verify-uploaded-leaves.js';
 
 const DEFAULT_COMPILER = { name: 'vincent-compiler', version: '0.0.1' } as const;
+
+export interface PublishEpochPhases {
+  uploadLeaves?: boolean;
+  uploadArtifacts?: boolean;
+  indexCheck?: boolean;
+  anchor?: boolean;
+}
 
 export interface LeafIndexCheckOptions {
   gatewayUrl: string;
@@ -29,8 +45,15 @@ export interface LeafIndexCheckOptions {
   timeoutMs?: number;
   pollIntervalMs?: number;
   sleep?: VerifyUploadedLeavesOptions['sleep'];
-  /** Skip leaf uploads already on Irys when Merkle-valid. Default false. */
-  resumeBeforeUpload?: boolean;
+  delayMs?: number;
+  concurrency?: number;
+  reuploadOnFailure?: boolean;
+  maxReuploadAttempts?: number;
+  postReuploadDelayMs?: number;
+  gatewayFallback?: boolean;
+  onReupload?: VerifyUploadedLeavesOptions['onReupload'];
+  onDelay?: VerifyUploadedLeavesOptions['onDelay'];
+  onLeafFailed?: VerifyUploadedLeavesOptions['onLeafFailed'];
 }
 
 export interface PublishEpochDeps {
@@ -39,14 +62,24 @@ export interface PublishEpochDeps {
   uploader: Uploader;
   chainPublisher: ChainPublisher & EpochChainReader;
   compiler?: { name: string; version: string };
-  /** When true, abort before upload if publisher already has on-chain epochs. */
   requireGenesis?: boolean;
-  /** When set, run live preflight before any Arweave/Irys uploads. */
   preflight?: EpochPreflightOptions;
-  /** When set, verify GraphQL leaf indexing before on-chain anchor. */
   leafIndexCheck?: LeafIndexCheckOptions;
-  /** Optional hook for long-running upload progress (e.g. CLI). */
+  phases?: PublishEpochPhases;
+  /** 'failed-only' restricts leaf uploads to checkpoint.failedLeafKeys (--retry-failed). */
+  uploadScope?: 'all' | 'failed-only';
+  uploadConcurrency?: number;
+  checkpointPath?: string;
   onProgress?: (progress: PublishEpochProgress) => void;
+  onCheckpointLoaded?: (summary: CheckpointLoadSummary) => void;
+}
+
+export interface CheckpointLoadSummary {
+  checkpoint: PublishCheckpoint;
+  totalLeaves: number;
+  uploadedLeaves: number;
+  indexVerifiedLeaves: number;
+  failedLeaves: number;
 }
 
 export type PublishEpochReport = PublishGenesisReport;
@@ -62,10 +95,9 @@ export interface PublishEpochProgress {
   phase: PublishEpochPhase;
   completed: number;
   total: number;
-  /** Leaves skipped during resume (phase leaves only). */
   skipped?: number;
-  /** Leaves uploaded during this run (phase leaves only). */
   uploaded?: number;
+  checkpointCount?: number;
 }
 
 function utf8Bytes(value: string): Uint8Array {
@@ -80,11 +112,126 @@ function appTag(): UploadTag {
   return { name: 'App', value: 'vincent' };
 }
 
+function resolvePhases(
+  phases: PublishEpochPhases | undefined,
+  leafIndexCheck: LeafIndexCheckOptions | undefined,
+): Required<PublishEpochPhases> {
+  const resolved = {
+    uploadLeaves: phases?.uploadLeaves ?? true,
+    uploadArtifacts: phases?.uploadArtifacts ?? true,
+    indexCheck: phases?.indexCheck ?? true,
+    anchor: phases?.anchor ?? true,
+  };
+  if (leafIndexCheck === undefined) {
+    resolved.indexCheck = false;
+  }
+  return resolved;
+}
+
+function formatIndexCheckFailure(
+  failed: Array<{ leafKey: string; error: string }>,
+  totalLeaves: number,
+): string {
+  const shownKeys = failed.slice(0, 10).map((entry) => entry.leafKey);
+  const more = failed.length > shownKeys.length ? `, +${String(failed.length - shownKeys.length)} more` : '';
+  return (
+    `Index-check failed for ${String(failed.length)} of ${String(totalLeaves)} leaves: ` +
+    `${shownKeys.join(', ')}${more}. First error: ${failed[0].error} ` +
+    `Anchor blocked; re-run with --retry-failed to re-upload only the failed leaves.`
+  );
+}
+
+interface ArtifactContext {
+  gatewayUrl: string;
+  graphqlUrl: string;
+  fetchImpl?: typeof fetch;
+}
+
+async function resolveOrUploadJsonl(
+  deps: PublishEpochDeps,
+  epochNumber: number,
+  checkpoint: PublishCheckpoint,
+  checkpointPath: string,
+  phases: Required<PublishEpochPhases>,
+  artifactCtx: ArtifactContext | undefined,
+): Promise<{ uri: string; checkpoint: PublishCheckpoint }> {
+  let current = checkpoint;
+  let uri = current.jsonlUri;
+  if (uri === undefined && artifactCtx !== undefined) {
+    uri =
+      (await resolveUploadedArtifactUri({
+        ...artifactCtx,
+        publisher: current.publisher,
+        epochNumber,
+        artifactType: 'jsonl',
+        expectedJsonlSha256: deps.epoch.jsonlSha256,
+      })) ?? undefined;
+  }
+
+  if (uri === undefined) {
+    deps.onProgress?.({ phase: 'jsonl', completed: 0, total: 1 });
+    const upload = await deps.uploader.upload(gzipSync(utf8Bytes(deps.epoch.jsonl)), [
+      appTag(),
+      epochTag(epochNumber),
+      { name: 'Type', value: 'jsonl' },
+    ]);
+    uri = upload.uri;
+    deps.onProgress?.({ phase: 'jsonl', completed: 1, total: 1 });
+  }
+
+  current = updateCheckpointUris(current, { jsonlUri: uri });
+  saveCheckpoint(checkpointPath, current);
+  return { uri, checkpoint: current };
+}
+
+async function resolveOrUploadManifest(
+  deps: PublishEpochDeps,
+  epochNumber: number,
+  parentRootContentId: string | null,
+  jsonlUri: string,
+  signed: ReturnType<typeof signManifest>,
+  hash: string,
+  checkpoint: PublishCheckpoint,
+  checkpointPath: string,
+  phases: Required<PublishEpochPhases>,
+  artifactCtx: ArtifactContext | undefined,
+): Promise<{ uri: string; checkpoint: PublishCheckpoint; signed: ReturnType<typeof signManifest> }> {
+  let current = checkpoint;
+  let uri = current.manifestUri;
+  if (uri === undefined && artifactCtx !== undefined) {
+    uri =
+      (await resolveUploadedArtifactUri({
+        ...artifactCtx,
+        publisher: current.publisher,
+        epochNumber,
+        artifactType: 'manifest',
+        expectedManifestHash: hash,
+      })) ?? undefined;
+  }
+
+  if (uri === undefined) {
+    deps.onProgress?.({ phase: 'manifest', completed: 0, total: 1 });
+    const upload = await deps.uploader.upload(utf8Bytes(JSON.stringify(signed)), [
+      appTag(),
+      epochTag(epochNumber),
+      { name: 'Type', value: 'manifest' },
+    ]);
+    uri = upload.uri;
+    deps.onProgress?.({ phase: 'manifest', completed: 1, total: 1 });
+  }
+
+  current = updateCheckpointUris(current, { manifestUri: uri });
+  saveCheckpoint(checkpointPath, current);
+  return { uri, checkpoint: current, signed };
+}
+
 /** Publish sequence: upload leaves + JSONL + manifest, then anchor on-chain. */
 export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpochReport> {
   const compiler = deps.compiler ?? DEFAULT_COMPILER;
   const publisher = toChecksumAddress(addressFromPrivateKey(deps.signerKeyHex));
   const publisherAddress = publisher as `0x${string}`;
+  const phases = resolvePhases(deps.phases, deps.leafIndexCheck);
+  const checkpointPath = deps.checkpointPath ?? '.vincent-publish-checkpoint.json';
 
   const resolved = await resolveEpochParent(deps.chainPublisher, publisherAddress);
 
@@ -107,97 +254,125 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
   }
 
   const { epochNumber, parentRootBytes32, parentRootContentId } = resolved;
-
-  const sortedLeaves = [...deps.epoch.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const leafTotal = sortedLeaves.length;
-  const indexCheck = deps.leafIndexCheck;
-  const resumeLeaves = indexCheck?.resumeBeforeUpload === true;
-  const getLeaf =
-    resumeLeaves && indexCheck !== undefined
-      ? createArweaveGetLeaf({
-          gatewayUrl: indexCheck.gatewayUrl,
-          graphqlUrl: indexCheck.graphqlUrl,
-          publisher: publisher.toLowerCase(),
-          epoch: epochNumber,
-          fetchImpl: indexCheck.fetchImpl,
-        })
-      : undefined;
-
-  let skippedLeaves = 0;
-  let uploadedLeaves = 0;
-  deps.onProgress?.({
-    phase: 'leaves',
-    completed: 0,
-    total: leafTotal,
-    skipped: 0,
-    uploaded: 0,
-  });
-
-  for (let index = 0; index < sortedLeaves.length; index++) {
-    const [leafKey, entry] = sortedLeaves[index]!;
-    const alreadyUploaded =
-      getLeaf !== undefined
-        ? await isLeafAlreadyUploaded(getLeaf, leafKey, deps.epoch.merkleRoot)
-        : false;
-
-    if (!alreadyUploaded) {
-      await deps.uploader.upload(utf8Bytes(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })), [
-        appTag(),
-        epochTag(epochNumber),
-        { name: 'LeafKey', value: leafKey },
-      ]);
-      uploadedLeaves += 1;
-    } else {
-      skippedLeaves += 1;
-    }
-
-    deps.onProgress?.({
-      phase: 'leaves',
-      completed: index + 1,
-      total: leafTotal,
-      skipped: skippedLeaves,
-      uploaded: uploadedLeaves,
-    });
-  }
-
-  deps.onProgress?.({ phase: 'jsonl', completed: 0, total: 1 });
-  const jsonlUpload = await deps.uploader.upload(gzipSync(utf8Bytes(deps.epoch.jsonl)), [
-    appTag(),
-    epochTag(epochNumber),
-    { name: 'Type', value: 'jsonl' },
-  ]);
-  deps.onProgress?.({ phase: 'jsonl', completed: 1, total: 1 });
-  const jsonlUri = jsonlUpload.uri;
-
-  const unsigned = buildManifest({
-    epoch: epochNumber,
-    parentRoot: parentRootContentId,
+  const fingerprint = {
+    publisher,
+    epochNumber,
     merkleRoot: deps.epoch.merkleRoot,
     jsonlSha256: deps.epoch.jsonlSha256,
-    uris: [jsonlUri],
-    compiler,
-    reviewPolicy: {
-      minAccepts: DEFAULT_GENESIS_REVIEW_POLICY.minAccepts,
-      reviewers: [publisher],
-    },
+  };
+
+  let checkpoint = loadOrCreateCheckpoint(checkpointPath, fingerprint);
+  const totalLeaves = deps.epoch.leaves.size;
+  deps.onCheckpointLoaded?.({
+    checkpoint,
+    totalLeaves,
+    uploadedLeaves: checkpoint.uploadedLeafKeys.length,
+    indexVerifiedLeaves: checkpoint.indexVerifiedLeafKeys.length,
+    failedLeaves: checkpoint.failedLeafKeys.length,
   });
 
-  const signed = signManifest(unsigned, deps.signerKeyHex);
-  const hash = manifestHash(signed);
+  const artifactCtx: ArtifactContext | undefined =
+    deps.leafIndexCheck === undefined
+      ? undefined
+      : {
+          gatewayUrl: deps.leafIndexCheck.gatewayUrl,
+          graphqlUrl: deps.leafIndexCheck.graphqlUrl,
+          fetchImpl: deps.leafIndexCheck.fetchImpl,
+        };
 
-  deps.onProgress?.({ phase: 'manifest', completed: 0, total: 1 });
-  const manifestUpload = await deps.uploader.upload(utf8Bytes(JSON.stringify(signed)), [
-    appTag(),
-    epochTag(epochNumber),
-    { name: 'Type', value: 'manifest' },
-  ]);
+  if (phases.indexCheck && deps.leafIndexCheck === undefined) {
+    throw new Error('leafIndexCheck gateway/graphql URLs are required for index-check');
+  }
 
-  deps.onProgress?.({ phase: 'manifest', completed: 1, total: 1 });
+  if (phases.uploadLeaves) {
+    const concurrency = deps.uploadConcurrency ?? DEFAULT_FULL_UPLOAD_CONCURRENCY;
+    const result = await uploadEpochLeaves({
+      epoch: deps.epoch,
+      epochNumber,
+      uploader: deps.uploader,
+      checkpoint,
+      checkpointPath,
+      concurrency,
+      onlyLeafKeys:
+        deps.uploadScope === 'failed-only' ? [...checkpoint.failedLeafKeys] : undefined,
+      onProgress: (progress) => {
+        deps.onProgress?.({
+          phase: 'leaves',
+          completed: progress.completed,
+          total: progress.total,
+          uploaded: progress.uploaded,
+          skipped: progress.skipped,
+          checkpointCount: progress.checkpointCount,
+        });
+      },
+    });
+    checkpoint = result.checkpoint;
+  }
 
-  if (deps.leafIndexCheck !== undefined) {
-    const indexTotal = deps.epoch.leaves.size;
-    deps.onProgress?.({ phase: 'index-check', completed: 0, total: indexTotal });
-    await verifyUploadedLeaves({
+  let jsonlUri = checkpoint.jsonlUri;
+  let manifestUri = checkpoint.manifestUri;
+  let signed = signManifest(
+    buildManifest({
+      epoch: epochNumber,
+      parentRoot: parentRootContentId,
+      merkleRoot: deps.epoch.merkleRoot,
+      jsonlSha256: deps.epoch.jsonlSha256,
+      uris: [jsonlUri ?? 'ar://pending'],
+      compiler,
+      reviewPolicy: {
+        minAccepts: DEFAULT_GENESIS_REVIEW_POLICY.minAccepts,
+        reviewers: [publisher],
+      },
+    }),
+    deps.signerKeyHex,
+  );
+  let hash = manifestHash(signed);
+
+  if (phases.uploadArtifacts || phases.indexCheck || phases.anchor) {
+    const jsonlResult = await resolveOrUploadJsonl(
+      deps,
+      epochNumber,
+      checkpoint,
+      checkpointPath,
+      phases,
+      artifactCtx,
+    );
+    jsonlUri = jsonlResult.uri;
+    checkpoint = jsonlResult.checkpoint;
+
+    const unsigned = buildManifest({
+      epoch: epochNumber,
+      parentRoot: parentRootContentId,
+      merkleRoot: deps.epoch.merkleRoot,
+      jsonlSha256: deps.epoch.jsonlSha256,
+      uris: [jsonlUri],
+      compiler,
+      reviewPolicy: {
+        minAccepts: DEFAULT_GENESIS_REVIEW_POLICY.minAccepts,
+        reviewers: [publisher],
+      },
+    });
+    signed = signManifest(unsigned, deps.signerKeyHex);
+    hash = manifestHash(signed);
+
+    const manifestResult = await resolveOrUploadManifest(
+      deps,
+      epochNumber,
+      parentRootContentId,
+      jsonlUri,
+      signed,
+      hash,
+      checkpoint,
+      checkpointPath,
+      phases,
+      artifactCtx,
+    );
+    manifestUri = manifestResult.uri;
+    checkpoint = manifestResult.checkpoint;
+  }
+
+  if (phases.indexCheck && deps.leafIndexCheck !== undefined) {
+    const result = await verifyUploadedLeaves({
       epoch: deps.epoch,
       publisher,
       epochNumber,
@@ -207,14 +382,43 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
       timeoutMs: deps.leafIndexCheck.timeoutMs,
       pollIntervalMs: deps.leafIndexCheck.pollIntervalMs,
       sleep: deps.leafIndexCheck.sleep,
+      delayMs: deps.leafIndexCheck.delayMs,
+      concurrency: deps.leafIndexCheck.concurrency,
+      reuploadOnFailure: deps.leafIndexCheck.reuploadOnFailure,
+      maxReuploadAttempts: deps.leafIndexCheck.maxReuploadAttempts,
+      postReuploadDelayMs: deps.leafIndexCheck.postReuploadDelayMs,
+      gatewayFallback: deps.leafIndexCheck.gatewayFallback,
+      onReupload: deps.leafIndexCheck.onReupload,
+      onDelay: deps.leafIndexCheck.onDelay,
+      onLeafFailed: deps.leafIndexCheck.onLeafFailed,
+      uploader: deps.uploader,
+      checkpoint,
+      checkpointPath,
       onLeafVerified: (completed, total) => {
-        deps.onProgress?.({
-          phase: 'index-check',
-          completed,
-          total,
-        });
+        deps.onProgress?.({ phase: 'index-check', completed, total });
       },
     });
+    checkpoint = result.checkpoint ?? checkpoint;
+
+    if (result.failed.length > 0) {
+      throw new Error(formatIndexCheckFailure(result.failed, deps.epoch.leaves.size));
+    }
+  }
+
+  if (!phases.anchor) {
+    return {
+      publisher,
+      jsonlUri: jsonlUri ?? 'ar://pending',
+      manifestUri: manifestUri ?? 'ar://pending',
+      manifestHash: hash,
+      txHash: `0x${'0'.repeat(64)}`,
+      leafCount: deps.epoch.leaves.size,
+      manifest: signed,
+    };
+  }
+
+  if (jsonlUri === undefined || manifestUri === undefined) {
+    throw new Error('JSONL and manifest URIs are required before index-check or anchor');
   }
 
   deps.onProgress?.({ phase: 'anchor', completed: 0, total: 1 });
@@ -223,14 +427,14 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
     jsonlSha256: sha256ContentIdToBytes32(deps.epoch.jsonlSha256),
     manifestHash: sha256ContentIdToBytes32(hash),
     parentRoot: parentRootBytes32,
-    manifestUri: manifestUpload.uri,
+    manifestUri,
   });
   deps.onProgress?.({ phase: 'anchor', completed: 1, total: 1 });
 
   return {
     publisher,
     jsonlUri,
-    manifestUri: manifestUpload.uri,
+    manifestUri,
     manifestHash: hash,
     txHash,
     leafCount: deps.epoch.leaves.size,

@@ -122,7 +122,38 @@ export function computeEpochUploadByteSizes(
   return sizes;
 }
 
+export interface RemainingUploadByteSizesInput {
+  epoch: EpochBuild;
+  epochNumber: number;
+  parentRoot: string | null;
+  completedLeafKeys?: ReadonlySet<string>;
+  includeJsonl?: boolean;
+  includeManifest?: boolean;
+}
+
+/** Byte sizes for leaves and artifacts not yet recorded in checkpoint. */
+export function computeRemainingUploadByteSizes(input: RemainingUploadByteSizesInput): number[] {
+  const sizes: number[] = [];
+  const completed = input.completedLeafKeys ?? new Set<string>();
+  const sortedLeaves = [...input.epoch.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  for (const [leafKey, entry] of sortedLeaves) {
+    if (completed.has(leafKey)) continue;
+    sizes.push(utf8Bytes(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })).length);
+  }
+
+  if (input.includeJsonl !== false) {
+    sizes.push(gzipSync(utf8Bytes(input.epoch.jsonl)).length);
+  }
+  if (input.includeManifest !== false) {
+    sizes.push(estimateManifestUploadBytes(input.epoch, input.epochNumber, input.parentRoot));
+  }
+  return sizes;
+}
+
 export interface EnsureIrysUploadBudgetOptions {
+  /** When set, quote only these byte sizes instead of the full epoch. */
+  byteSizes?: readonly number[];
   privateKeyHex: string;
   rpcUrl: string;
   epoch: EpochBuild;
@@ -186,11 +217,13 @@ async function readLoadedBalanceWei(
 export async function ensureIrysUploadBudget(
   options: EnsureIrysUploadBudgetOptions,
 ): Promise<void> {
-  const byteSizes = computeEpochUploadByteSizes(
-    options.epoch,
-    options.epochNumber,
-    options.parentRootContentId,
-  );
+  const byteSizes =
+    options.byteSizes ??
+    computeEpochUploadByteSizes(
+      options.epoch,
+      options.epochNumber,
+      options.parentRootContentId,
+    );
 
   const irysClientFactory = options.irysClientFactory ?? createIrysDevnetClient;
   const needsIrysClient =

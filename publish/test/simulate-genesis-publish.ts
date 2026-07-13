@@ -20,6 +20,7 @@ import {
   type VerifyGenesisPublishResult,
 } from '../src/verify-genesis-publish.js';
 import { loadGenesisMiniClaims } from './helpers.js';
+import { testCheckpointPath } from './helpers.js';
 import { createMockChainPublisher } from './mock-chain-publisher.js';
 import { createMockIrysGateway } from './mock-irys-gateway.js';
 import { createLiveMockIrysFetchImpl } from './live-mock-irys-fetch.js';
@@ -104,6 +105,7 @@ export async function simulateGenesisMiniPublish(
     signerKeyHex,
     uploader,
     chainPublisher,
+    checkpointPath: testCheckpointPath(),
     preflight,
     leafIndexCheck: {
       gatewayUrl: liveGateway.gatewayUrl,

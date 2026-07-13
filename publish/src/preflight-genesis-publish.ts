@@ -39,6 +39,8 @@ export interface EpochUploadBudgetPreflight {
   onQuote?: EnsureIrysUploadBudgetOptions['onQuote'];
   recoverFundTxId?: EnsureIrysUploadBudgetOptions['recoverFundTxId'];
   onFundTxSubmitted?: EnsureIrysUploadBudgetOptions['onFundTxSubmitted'];
+  /** When set, quote only these byte sizes (partial checkpoint resume). */
+  byteSizes?: readonly number[];
   /** Optional hook when upload-budget quoting begins (e.g. CLI progress). */
   onStart?: (leafCount: number) => void;
 }
@@ -286,6 +288,7 @@ export async function preflightEpochPublish(args: {
       onQuote: args.preflight.uploadBudget.onQuote,
       recoverFundTxId: args.preflight.uploadBudget.recoverFundTxId,
       onFundTxSubmitted: args.preflight.uploadBudget.onFundTxSubmitted,
+      byteSizes: args.preflight.uploadBudget.byteSizes,
     });
   }
 }

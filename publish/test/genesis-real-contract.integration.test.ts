@@ -7,6 +7,7 @@ import { createLiveMockIrysFetchImpl } from './live-mock-irys-fetch.js';
 import { getLocalChainHarness } from './local-chain-harness.js';
 import { createMockUploader } from './mock-uploader.js';
 import { loadGenesisMiniClaims, loadGenesisMiniEpoch2Claims } from './helpers.js';
+import { testCheckpointPath } from './helpers.js';
 import {
   mockPreflightOverrides,
   simulateGenesisMiniPublish,
@@ -47,6 +48,7 @@ describe('genesis pipeline against real local VincentAnchorRegistry', () => {
       signerKeyHex: account.privateKeyHex,
       uploader: createMockUploader(),
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     const secondUploader = createMockUploader();
@@ -106,6 +108,7 @@ describe('genesis pipeline against real local VincentAnchorRegistry', () => {
         signerKeyHex: account.privateKeyHex,
         uploader,
         chainPublisher,
+        checkpointPath: testCheckpointPath(),
         preflight: mockPreflightOverrides(),
         leafIndexCheck: {
           gatewayUrl: gateway.gatewayUrl,
@@ -163,6 +166,7 @@ describe('genesis pipeline against real local VincentAnchorRegistry', () => {
       signerKeyHex: account.privateKeyHex,
       uploader: createMockUploader(),
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     const epoch2Built = compile(loadGenesisMiniEpoch2Claims(), {});
@@ -173,6 +177,7 @@ describe('genesis pipeline against real local VincentAnchorRegistry', () => {
     const secondUploader = createMockUploader();
     await expect(
       publishEpoch({
+        checkpointPath: testCheckpointPath(),
         epoch: epoch2Built.value,
         signerKeyHex: account.privateKeyHex,
         uploader: secondUploader,

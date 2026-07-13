@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   checkUploadBudgetSufficient,
   computeEpochUploadByteSizes,
+  computeRemainingUploadByteSizes,
   DEFAULT_IRYS_FUNDING_GAS_RESERVE_WEI,
   ensureIrysUploadBudget,
 } from '../src/estimate-epoch-upload-cost.js';
@@ -23,6 +24,28 @@ describe('estimate epoch upload cost', () => {
     const sizes = computeEpochUploadByteSizes(built.value, 1, null);
     expect(sizes).toHaveLength(built.value.leaves.size + 2);
     expect(sizes.every((size) => size > 0)).toBe(true);
+  });
+
+  it('quotes only remaining leaves and artifacts from checkpoint state', () => {
+    const built = compile(loadGenesisMiniClaims(), {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const fullSizes = computeEpochUploadByteSizes(built.value, 1, null);
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const completed = new Set(sortedLeaves.slice(0, 2).map(([leafKey]) => leafKey));
+
+    const remainingSizes = computeRemainingUploadByteSizes({
+      epoch: built.value,
+      epochNumber: 1,
+      parentRoot: null,
+      completedLeafKeys: completed,
+      includeJsonl: true,
+      includeManifest: true,
+    });
+
+    expect(remainingSizes).toHaveLength(fullSizes.length - 2);
   });
 
   it('requires wallet headroom to fund an unfunded Irys deficit', () => {

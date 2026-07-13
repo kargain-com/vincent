@@ -1,10 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Claim } from '@kargain/vincent/protocol';
 
 import { validateVin } from '@kargain/vincent';
+
+import type { MockUploader } from './mock-uploader.js';
+import { createLiveMockIrysFetchImpl } from './live-mock-irys-fetch.js';
 
 const FIXTURE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -45,4 +50,23 @@ export function loadGenesisMiniClaims(): Claim[] {
 
 export function loadGenesisMiniEpoch2Claims(): Claim[] {
   return JSON.parse(readFileSync(join(EPOCH2_FIXTURE_DIR, 'claims.json'), 'utf8')) as Claim[];
+}
+
+/** Unique checkpoint path per call (avoids cross-test pollution). */
+export function testCheckpointPath(): string {
+  return join(tmpdir(), `vincent-publish-test-${randomUUID()}.json`);
+}
+
+/** Live mock Irys fetch for index-check during offline publish tests. */
+export function mockLeafIndexCheck(
+  uploader: MockUploader,
+  publisher: string,
+  epoch: number,
+): ReturnType<typeof createLiveMockIrysFetchImpl> & { pollIntervalMs: 0; sleep: () => Promise<void> } {
+  const live = createLiveMockIrysFetchImpl(uploader, publisher, epoch);
+  return {
+    ...live,
+    pollIntervalMs: 0,
+    sleep: async () => {},
+  };
 }

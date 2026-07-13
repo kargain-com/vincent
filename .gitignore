@@ -14,3 +14,7 @@ contracts/coverage/
 
 # Local maintainer notes (never committed / never published)
 *.local.md
+
+# Publish resume checkpoint (local state only)
+publish/.vincent-publish-checkpoint.json
+publish/.vincent-publish-checkpoint.json.tmp

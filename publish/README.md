@@ -154,11 +154,60 @@ indexed and Merkle-valid (per-leaf timeout; longer for `--full`). If indexing fa
 
 ### Full seed (`--full`) timing
 
-The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves **sequentially**
-(one Irys transaction per leaf), so a full devnet publish typically runs for **many hours**.
-Progress is logged every 250 leaves. Re-runs **skip leaves** already discoverable via GraphQL
-with a valid Merkle proof against the current epoch root. Ensure the publisher wallet holds enough **Base Sepolia
-ETH** for the quoted Irys upload budget plus `publishEpoch` gas.
+The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves in **parallel** (default concurrency 10) and persists a local checkpoint after each successful leaf upload. Progress is logged continuously. Re-runs resume from the checkpoint file instead of re-uploading completed leaves.
+
+| Flag | Purpose |
+|------|---------|
+| `--upload-only` | Upload leaves + JSONL + manifest; write checkpoint; skip index-check and anchor |
+| `--anchor-only` | Skip leaf/artifact uploads; resolve JSONL/manifest from GraphQL or checkpoint; parallel index-check + anchor |
+| `--retry-failed` | Re-upload **only** `failedLeafKeys` from the checkpoint; no index-check or anchor |
+| `--upload-concurrency=N` | Parallel leaf uploads (default **10** for `--full`, **1** for mini fixtures) |
+| `--index-check-concurrency=N` | Parallel GraphQL leaf verifications (default **20** for `--full`) |
+| `--index-check-delay=MS` | Pause before index-check (default **180000** after upload; **0** for `--anchor-only`) |
+| `--index-check-timeout=MS` | Per-leaf GraphQL poll budget (default **120000** for `--full`) |
+| `--checkpoint-file=PATH` | Checkpoint path (default `publish/.vincent-publish-checkpoint.json`) |
+
+**Checkpoint file** (`.vincent-publish-checkpoint.json`, gitignored, schema v2) tracks each phase separately, plus optional JSONL/manifest URIs:
+
+| Field | Meaning |
+|-------|---------|
+| `uploadedLeafKeys` | Leaves uploaded to Irys — upload-phase resume (`--full`, `--upload-only`) |
+| `indexVerifiedLeafKeys` | Leaves confirmed by index-check — index-check resume (`--anchor-only`) |
+| `failedLeafKeys` | Leaves that failed the last index-check — input for `--retry-failed` |
+| `leafUris` | `leafKey → ar://txId` of the latest upload — used by the gateway fallback |
+
+The fingerprint is `publisher + epochNumber + merkleRoot + jsonlSha256`; delete the file when switching builds or publishers. Old v1 checkpoints are migrated automatically (their `completedLeafKeys` become `indexVerifiedLeafKeys`).
+
+**Index-check is non-fail-fast with a gateway fallback.** Before index-check on full publishes (after a fresh upload), the CLI waits **3 minutes** (bundler catch-up) then verifies leaves in parallel (default concurrency 20). **`--anchor-only` skips this delay** (leaves were uploaded earlier). Progress logs every **25** verified leaves and starts from the checkpoint count on resume. On GraphQL timeout the CLI **re-uploads** the leaf, records its tx URI, and immediately verifies the leaf **directly from the gateway by tx id** (Merkle-proof check, no GraphQL); only on a gateway miss does it wait **90s** and retry GraphQL (up to **6** attempts for `--anchor-only`). A leaf that exhausts all attempts is added to `failedLeafKeys` and the check **continues with the remaining leaves**. When any leaf fails, the run ends with a summary and **no chain transaction is sent** — fix with `--retry-failed` below.
+
+Preflight quotes only **remaining** upload bytes (leaves not in checkpoint + artifacts not yet valid on Irys). `--retry-failed` quotes only the failed leaf bytes. `--anchor-only` skips the Irys upload budget quote.
+
+### Recovery playbook
+
+When index-check reported failed leaves (e.g. devnet GraphQL never indexed ~20 of 14k):
+
+```bash
+# 1) Check all leaves; collect failures instead of stopping at the first one
+caffeinate -i pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --anchor-only
+
+# 2) Re-upload only the failed leaves recorded in the checkpoint
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --retry-failed
+
+# 3) Index-check the remaining leaves (gateway fallback picks up the fresh tx ids) + anchor
+caffeinate -i pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --anchor-only
+```
+
+Step 3 skips everything already in `indexVerifiedLeafKeys`, so only the retried leaves are re-checked.
+
+To resume a partial upload after interruption:
+
+```bash
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full
+# or upload without anchoring:
+pnpm --filter @kargain/vincent-publish publish:epoch -- --devnet --full --upload-only
+```
+
+Delete `publish/.vincent-publish-checkpoint.json` only when the compiled epoch fingerprint changes or you intend to restart from scratch.
 
 ### Re-verify an existing epoch (verify-only)
 

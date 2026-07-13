@@ -17,6 +17,7 @@ import {
   VIN_FUEL,
   VIN_PLANT,
 } from './helpers.js';
+import { testCheckpointPath } from './helpers.js';
 
 describe('publishGenesis offline mock e2e', () => {
   it('uploads, anchors, decodes via tag getLeaf, and verifyEpoch passes', async () => {
@@ -34,6 +35,7 @@ describe('publishGenesis offline mock e2e', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     expect(report.publisher).toBe(TEST_PUBLISHER);
@@ -110,6 +112,7 @@ describe('publishGenesis offline mock e2e', () => {
       signerKeyHex: TEST_PRIVATE_KEY,
       uploader,
       chainPublisher,
+      checkpointPath: testCheckpointPath(),
     });
 
     const secondUploader = createMockUploader();
@@ -151,6 +154,7 @@ describe('publishGenesis offline mock e2e', () => {
         signerKeyHex: TEST_PRIVATE_KEY,
         uploader,
         chainPublisher,
+        checkpointPath: testCheckpointPath(),
         preflight: {
           rpcUrl: 'http://localhost:8545',
           getBalance: async () => parseEther('1'),

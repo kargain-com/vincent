@@ -9,10 +9,25 @@ export interface MockGatewayItem {
   data: { leaf: string; proof: MerkleProof };
 }
 
+function extractArtifactType(query: string): string | null {
+  const match = query.match(/Type", values: \["([^"]+)"\]/);
+  return match?.[1] ?? null;
+}
+
+export interface MockArtifactItem {
+  owner: string;
+  epoch: number;
+  artifactType: string;
+  txId: string;
+  height: number;
+}
+
 export interface MockGatewayOptions {
   gatewayUrl?: string;
   graphqlUrl?: string;
   staticBodies?: Record<string, string>;
+  staticBinaryBodies?: Record<string, Uint8Array>;
+  artifactItems?: MockArtifactItem[];
 }
 
 function extractLeafKey(query: string): string | null {
@@ -52,6 +67,8 @@ export function createMockGateway(
   const gatewayUrl = options?.gatewayUrl ?? 'https://mock.arweave.test';
   const graphqlUrl = options?.graphqlUrl ?? `${gatewayUrl}/graphql`;
   const staticBodies = options?.staticBodies ?? {};
+  const staticBinaryBodies = options?.staticBinaryBodies ?? {};
+  const artifactItems = options?.artifactItems ?? [];
   const byTxId = new Map(items.map((item) => [item.txId, item]));
 
   const fetchImpl: typeof fetch = (input, init) => {
@@ -64,6 +81,7 @@ export function createMockGateway(
       const owner = extractOwner(query);
       const epoch = extractEpoch(query);
       const leafKey = extractLeafKey(query);
+      const artifactType = extractArtifactType(query);
 
       if (usesHeightDescSort(query) && !usesOrderDesc(query)) {
         return Promise.resolve(
@@ -77,16 +95,27 @@ export function createMockGateway(
       }
 
       const matches =
-        owner === null || epoch === null || leafKey === null
+        owner === null || epoch === null
           ? []
-          : items
-              .filter(
-                (item) =>
-                  item.owner.toLowerCase() === owner.toLowerCase() &&
-                  item.epoch === epoch &&
-                  item.leafKey === leafKey,
-              )
-              .sort((a, b) => b.height - a.height);
+          : leafKey !== null
+            ? items
+                .filter(
+                  (item) =>
+                    item.owner.toLowerCase() === owner.toLowerCase() &&
+                    item.epoch === epoch &&
+                    item.leafKey === leafKey,
+                )
+                .sort((a, b) => b.height - a.height)
+            : artifactType !== null
+              ? artifactItems
+                  .filter(
+                    (item) =>
+                      item.owner.toLowerCase() === owner.toLowerCase() &&
+                      item.epoch === epoch &&
+                      item.artifactType === artifactType,
+                  )
+                  .sort((a, b) => b.height - a.height)
+              : [];
 
       const edges = matches.slice(0, 1).map((item) => ({ node: { id: item.txId } }));
       return Promise.resolve(
@@ -98,6 +127,15 @@ export function createMockGateway(
     }
 
     const txId = url.slice(`${gatewayUrl.replace(/\/+$/, '')}/`.length);
+    const binaryBody = staticBinaryBodies[txId];
+    if (binaryBody !== undefined) {
+      return Promise.resolve(
+        new Response(binaryBody, {
+          status: 200,
+          headers: { 'content-type': 'application/octet-stream' },
+        }),
+      );
+    }
     const staticBody = staticBodies[txId];
     if (staticBody !== undefined) {
       return Promise.resolve(

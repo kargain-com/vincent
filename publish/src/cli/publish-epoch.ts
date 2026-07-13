@@ -18,8 +18,27 @@ import { createIrysDevnetUploader } from '../adapters/irys-devnet-uploader.js';
 import { IRYS_GRAPHQL_URL, IRYS_GATEWAY_URL } from '../constants.js';
 import { loadFullSeedClaims } from '../load-full-seed-claims.js';
 import { preflightEpochPublish } from '../preflight-genesis-publish.js';
+import {
+  DEFAULT_ANCHOR_ONLY_INDEX_CHECK_MAX_REUPLOADS,
+  DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS,
+  DEFAULT_FULL_INDEX_CHECK_CONCURRENCY,
+  DEFAULT_FULL_INDEX_CHECK_DELAY_MS,
+  DEFAULT_FULL_INDEX_CHECK_LOG_INTERVAL,
+  DEFAULT_FULL_INDEX_CHECK_MAX_REUPLOADS,
+  DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS,
+  DEFAULT_FULL_UPLOAD_CONCURRENCY,
+  DEFAULT_POST_REUPLOAD_DELAY_MS,
+} from '../constants.js';
+import {
+  failedLeafKeySet,
+  loadOrCreateCheckpoint,
+  uploadedLeafKeySet,
+} from '../publish-checkpoint.js';
 import { publishEpoch, type PublishEpochProgress } from '../publish-epoch.js';
-import type { UploadBudgetQuote } from '../estimate-epoch-upload-cost.js';
+import {
+  computeRemainingUploadByteSizes,
+  type UploadBudgetQuote,
+} from '../estimate-epoch-upload-cost.js';
 import { resolveEpochParent } from '../resolve-epoch-parent.js';
 import { manifestHash } from '../sign-manifest.js';
 import {
@@ -40,6 +59,14 @@ interface CliOptions {
   genesis: boolean;
   fixture: 'genesis-mini' | 'full';
   verifyOnly: boolean;
+  uploadOnly: boolean;
+  anchorOnly: boolean;
+  retryFailed: boolean;
+  uploadConcurrency?: number;
+  indexCheckConcurrency?: number;
+  indexCheckDelayMs?: number;
+  indexCheckTimeoutMs?: number;
+  checkpointFile: string;
   publisher?: string;
   manifestUri?: string;
 }
@@ -48,6 +75,9 @@ function parseArgs(argv: string[]): CliOptions {
   const devnet = argv.includes('--devnet');
   const genesis = argv.includes('--genesis');
   const verifyOnly = argv.includes('--verify-only');
+  const uploadOnly = argv.includes('--upload-only');
+  const anchorOnly = argv.includes('--anchor-only');
+  const retryFailed = argv.includes('--retry-failed');
   const fixtureArg = argv.find((arg) => arg.startsWith('--fixture='));
   const fixtureFlagIndex = argv.indexOf('--fixture');
   const publisherArg = argv.find((arg) => arg.startsWith('--publisher='));
@@ -74,6 +104,79 @@ function parseArgs(argv: string[]): CliOptions {
     fixture = 'full';
   }
 
+  if (uploadOnly && anchorOnly) {
+    throw new Error('--upload-only and --anchor-only are mutually exclusive');
+  }
+  if (retryFailed && anchorOnly) {
+    throw new Error('--retry-failed and --anchor-only are mutually exclusive');
+  }
+
+  const concurrencyArg = argv.find((arg) => arg.startsWith('--upload-concurrency='));
+  const concurrencyFlagIndex = argv.indexOf('--upload-concurrency');
+  let uploadConcurrency: number | undefined;
+  if (concurrencyArg !== undefined) {
+    uploadConcurrency = Number(concurrencyArg.slice('--upload-concurrency='.length));
+  } else if (concurrencyFlagIndex >= 0) {
+    uploadConcurrency = Number(argv[concurrencyFlagIndex + 1]);
+  }
+  if (uploadConcurrency !== undefined && (!Number.isInteger(uploadConcurrency) || uploadConcurrency < 1)) {
+    throw new Error('--upload-concurrency must be a positive integer');
+  }
+
+  const indexConcurrencyArg = argv.find((arg) => arg.startsWith('--index-check-concurrency='));
+  const indexConcurrencyFlagIndex = argv.indexOf('--index-check-concurrency');
+  let indexCheckConcurrency: number | undefined;
+  if (indexConcurrencyArg !== undefined) {
+    indexCheckConcurrency = Number(indexConcurrencyArg.slice('--index-check-concurrency='.length));
+  } else if (indexConcurrencyFlagIndex >= 0) {
+    indexCheckConcurrency = Number(argv[indexConcurrencyFlagIndex + 1]);
+  }
+  if (
+    indexCheckConcurrency !== undefined &&
+    (!Number.isInteger(indexCheckConcurrency) || indexCheckConcurrency < 1)
+  ) {
+    throw new Error('--index-check-concurrency must be a positive integer');
+  }
+
+  const indexDelayArg = argv.find((arg) => arg.startsWith('--index-check-delay='));
+  const indexDelayFlagIndex = argv.indexOf('--index-check-delay');
+  let indexCheckDelayMs: number | undefined;
+  if (indexDelayArg !== undefined) {
+    indexCheckDelayMs = Number(indexDelayArg.slice('--index-check-delay='.length));
+  } else if (indexDelayFlagIndex >= 0) {
+    indexCheckDelayMs = Number(argv[indexDelayFlagIndex + 1]);
+  }
+  if (
+    indexCheckDelayMs !== undefined &&
+    (!Number.isInteger(indexCheckDelayMs) || indexCheckDelayMs < 0)
+  ) {
+    throw new Error('--index-check-delay must be a non-negative integer (milliseconds)');
+  }
+
+  const indexTimeoutArg = argv.find((arg) => arg.startsWith('--index-check-timeout='));
+  const indexTimeoutFlagIndex = argv.indexOf('--index-check-timeout');
+  let indexCheckTimeoutMs: number | undefined;
+  if (indexTimeoutArg !== undefined) {
+    indexCheckTimeoutMs = Number(indexTimeoutArg.slice('--index-check-timeout='.length));
+  } else if (indexTimeoutFlagIndex >= 0) {
+    indexCheckTimeoutMs = Number(argv[indexTimeoutFlagIndex + 1]);
+  }
+  if (
+    indexCheckTimeoutMs !== undefined &&
+    (!Number.isInteger(indexCheckTimeoutMs) || indexCheckTimeoutMs < 1)
+  ) {
+    throw new Error('--index-check-timeout must be a positive integer (milliseconds)');
+  }
+
+  const checkpointArg = argv.find((arg) => arg.startsWith('--checkpoint-file='));
+  const checkpointFlagIndex = argv.indexOf('--checkpoint-file');
+  let checkpointFile = join(PUBLISH_ROOT, '.vincent-publish-checkpoint.json');
+  if (checkpointArg !== undefined) {
+    checkpointFile = checkpointArg.slice('--checkpoint-file='.length);
+  } else if (checkpointFlagIndex >= 0) {
+    checkpointFile = argv[checkpointFlagIndex + 1] ?? checkpointFile;
+  }
+
   let publisher: string | undefined;
   if (publisherArg !== undefined) {
     publisher = publisherArg.slice('--publisher='.length);
@@ -88,7 +191,22 @@ function parseArgs(argv: string[]): CliOptions {
     manifestUri = argv[manifestFlagIndex + 1];
   }
 
-  return { devnet, genesis, fixture, verifyOnly, publisher, manifestUri };
+  return {
+    devnet,
+    genesis,
+    fixture,
+    verifyOnly,
+    uploadOnly,
+    anchorOnly,
+    retryFailed,
+    uploadConcurrency,
+    indexCheckConcurrency,
+    indexCheckDelayMs,
+    indexCheckTimeoutMs,
+    checkpointFile,
+    publisher,
+    manifestUri,
+  };
 }
 
 function requireEnv(name: string): string {
@@ -210,8 +328,9 @@ function formatProgressPercent(completed: number, total: number): string {
   return `${((completed / total) * 100).toFixed(1)}%`;
 }
 
-function createPublishProgressLogger(leafLogInterval: number) {
+function createPublishProgressLogger(leafLogInterval: number, indexCheckLogInterval: number) {
   let lastLeafLogAt = 0;
+  let lastIndexLogAt = 0;
 
   return (progress: PublishEpochProgress): void => {
     switch (progress.phase) {
@@ -248,10 +367,11 @@ function createPublishProgressLogger(leafLogInterval: number) {
         const shouldLog =
           progress.completed === 0 ||
           progress.completed === progress.total ||
-          progress.completed % Math.max(leafLogInterval, 1) === 0;
+          progress.completed - lastIndexLogAt >= indexCheckLogInterval;
         if (!shouldLog) {
           return;
         }
+        lastIndexLogAt = progress.completed;
         process.stdout.write(
           `Verifying GraphQL index ${String(progress.completed)}/${String(progress.total)} ` +
             `(${formatProgressPercent(progress.completed, progress.total)})...\n`,
@@ -309,39 +429,88 @@ async function runPublish(options: CliOptions): Promise<void> {
     throw new Error(built.error.message);
   }
 
-  const uploadBudget = {
-    epoch: built.value,
+  const fingerprint = {
+    publisher,
     epochNumber: resolved.epochNumber,
-    parentRootContentId: resolved.parentRootContentId,
-    recoverFundTxId: optionalFundTxId(),
-    onStart: (leafCount: number) => {
-      process.stdout.write(
-        `Upload budget preflight (${String(leafCount)} leaves)...\n`,
-      );
-    },
-    onQuote: (quote: UploadBudgetQuote) => {
-      process.stdout.write(
-        `Irys quote: ${formatEther(quote.estimatedCostWei)} ETH ` +
-          `(need ${formatEther(quote.requiredWei)} ETH on Irys, ` +
-          `funded ${formatEther(quote.irysLoadedBalanceWei)} ETH, ` +
-          `Base Sepolia wallet ${formatEther(quote.walletBalanceWei)} ETH` +
-          (quote.deficitWei > 0n ? `, fund ${formatEther(quote.deficitWei)} ETH` : '') +
-          `)\n`,
-      );
-    },
-    onFund: (deficitWei: bigint) => {
-      process.stdout.write(
-        `Funding Irys account with ${deficitWei.toString()} wei from Base Sepolia...\n`,
-      );
-    },
-    onFundTxSubmitted: (txId: `0x${string}`) => {
-      process.stdout.write(
-        `Submitted Irys fund tx ${txId}; waiting for Base Sepolia confirmation...\n`,
-      );
-    },
+    merkleRoot: built.value.merkleRoot,
+    jsonlSha256: built.value.jsonlSha256,
   };
+  const checkpoint = loadOrCreateCheckpoint(options.checkpointFile, fingerprint);
+  const uploadedSet = uploadedLeafKeySet(checkpoint);
+  const failedSet = failedLeafKeySet(checkpoint);
+  const totalLeaves = built.value.leaves.size;
 
-  if (uploadBudget.recoverFundTxId !== undefined) {
+  process.stdout.write(
+    `Checkpoint: uploaded ${String(uploadedSet.size)} | ` +
+      `index-verified ${String(checkpoint.indexVerifiedLeafKeys.length)} | ` +
+      `failed ${String(failedSet.size)} / ${String(totalLeaves)}\n`,
+  );
+
+  if (options.retryFailed && failedSet.size === 0) {
+    process.stdout.write('No failed leaves recorded in the checkpoint; nothing to retry.\n');
+    return;
+  }
+
+  if (options.retryFailed) {
+    process.stdout.write(
+      `Retry-failed: re-uploading ${String(failedSet.size)} failed leaves (no index-check or anchor)\n`,
+    );
+  } else if (!options.anchorOnly) {
+    process.stdout.write(
+      `Remaining uploads: ${String(totalLeaves - uploadedSet.size)} leaves; concurrency ${String(
+        options.uploadConcurrency ?? (options.fixture === 'full' ? DEFAULT_FULL_UPLOAD_CONCURRENCY : 1),
+      )}\n`,
+    );
+  }
+
+  // --retry-failed quotes only the failed leaf bytes; everything else counts as completed.
+  const budgetCompletedLeafKeys = options.retryFailed
+    ? new Set([...built.value.leaves.keys()].filter((leafKey) => !failedSet.has(leafKey)))
+    : uploadedSet;
+
+  const uploadBudget = options.anchorOnly
+    ? undefined
+    : {
+        epoch: built.value,
+        epochNumber: resolved.epochNumber,
+        parentRootContentId: resolved.parentRootContentId,
+        recoverFundTxId: optionalFundTxId(),
+        byteSizes: computeRemainingUploadByteSizes({
+          epoch: built.value,
+          epochNumber: resolved.epochNumber,
+          parentRoot: resolved.parentRootContentId,
+          completedLeafKeys: budgetCompletedLeafKeys,
+          includeJsonl: !options.retryFailed && checkpoint.jsonlUri === undefined,
+          includeManifest: !options.retryFailed && checkpoint.manifestUri === undefined,
+        }),
+        onStart: (leafCount: number) => {
+          process.stdout.write(
+            `Upload budget preflight (${String(leafCount)} leaves; remaining bytes only)...\n`,
+          );
+        },
+        onQuote: (quote: UploadBudgetQuote) => {
+          process.stdout.write(
+            `Irys quote: ${formatEther(quote.estimatedCostWei)} ETH ` +
+              `(need ${formatEther(quote.requiredWei)} ETH on Irys, ` +
+              `funded ${formatEther(quote.irysLoadedBalanceWei)} ETH, ` +
+              `Base Sepolia wallet ${formatEther(quote.walletBalanceWei)} ETH` +
+              (quote.deficitWei > 0n ? `, fund ${formatEther(quote.deficitWei)} ETH` : '') +
+              `)\n`,
+          );
+        },
+        onFund: (deficitWei: bigint) => {
+          process.stdout.write(
+            `Funding Irys account with ${deficitWei.toString()} wei from Base Sepolia...\n`,
+          );
+        },
+        onFundTxSubmitted: (txId: `0x${string}`) => {
+          process.stdout.write(
+            `Submitted Irys fund tx ${txId}; waiting for Base Sepolia confirmation...\n`,
+          );
+        },
+      };
+
+  if (uploadBudget?.recoverFundTxId !== undefined) {
     process.stdout.write(
       `Recovering prior Irys fund tx ${uploadBudget.recoverFundTxId}...\n`,
     );
@@ -371,24 +540,84 @@ async function runPublish(options: CliOptions): Promise<void> {
     },
   });
 
+  const phaseLabel = options.retryFailed
+    ? 'retry-failed (re-upload failed leaves only)'
+    : options.anchorOnly
+      ? 'anchor-only (skip leaf uploads)'
+      : options.uploadOnly
+        ? 'upload-only (no index-check or anchor)'
+        : 'full pipeline';
   process.stdout.write(
-    `Publishing epoch (${String(built.value.leaves.size)} leaves; resume enabled; ` +
-      `sequential Irys uploads may take hours)...\n`,
+    `Publishing epoch (${String(built.value.leaves.size)} leaves; ${phaseLabel})...\n`,
   );
+
   const report = await publishEpoch({
     epoch: built.value,
     signerKeyHex: privateKey,
     uploader,
     chainPublisher,
     requireGenesis: options.genesis ? true : undefined,
-    onProgress: createPublishProgressLogger(options.fixture === 'full' ? 250 : 1),
+    checkpointPath: options.checkpointFile,
+    uploadScope: options.retryFailed ? 'failed-only' : 'all',
+    uploadConcurrency:
+      options.uploadConcurrency ?? (options.fixture === 'full' ? DEFAULT_FULL_UPLOAD_CONCURRENCY : 1),
+    phases: {
+      uploadLeaves: !options.anchorOnly,
+      uploadArtifacts: !options.anchorOnly && !options.retryFailed,
+      indexCheck: !options.uploadOnly && !options.retryFailed,
+      anchor: !options.uploadOnly && !options.retryFailed,
+    },
+    onProgress: createPublishProgressLogger(
+      options.fixture === 'full' ? 250 : 1,
+      options.fixture === 'full' ? DEFAULT_FULL_INDEX_CHECK_LOG_INTERVAL : 1,
+    ),
     leafIndexCheck: {
       gatewayUrl: irysGatewayUrl,
       graphqlUrl: irysGraphqlUrl,
-      timeoutMs: options.fixture === 'full' ? 120_000 : undefined,
-      resumeBeforeUpload: true,
+      timeoutMs:
+        options.indexCheckTimeoutMs ??
+        (options.fixture === 'full' ? DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS : undefined),
+      delayMs:
+        options.indexCheckDelayMs ??
+        (options.anchorOnly
+          ? 0
+          : options.fixture === 'full'
+            ? DEFAULT_FULL_INDEX_CHECK_DELAY_MS
+            : undefined),
+      concurrency:
+        options.indexCheckConcurrency ??
+        (options.fixture === 'full' ? DEFAULT_FULL_INDEX_CHECK_CONCURRENCY : undefined),
+      maxReuploadAttempts: options.anchorOnly
+        ? DEFAULT_ANCHOR_ONLY_INDEX_CHECK_MAX_REUPLOADS
+        : DEFAULT_FULL_INDEX_CHECK_MAX_REUPLOADS,
+      postReuploadDelayMs: options.anchorOnly
+        ? DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS
+        : DEFAULT_POST_REUPLOAD_DELAY_MS,
+      reuploadOnFailure: true,
+      gatewayFallback: true,
+      onDelay: (delayMs) => {
+        process.stdout.write(
+          `Waiting ${String(Math.round(delayMs / 1000))}s for Irys bundler index catch-up...\n`,
+        );
+      },
+      onReupload: (leafKey, attempt, maxAttempts) => {
+        process.stderr.write(
+          `Re-uploading LeafKey ${leafKey} (${String(attempt)}/${String(maxAttempts)}) ` +
+            'after GraphQL index miss...\n',
+        );
+      },
+      onLeafFailed: (leafKey, error) => {
+        process.stderr.write(`Index-check FAILED for LeafKey ${leafKey}: ${error}\n`);
+      },
     },
   });
+
+  if (options.retryFailed) {
+    process.stdout.write(
+      'Retry-failed complete. Re-run with --anchor-only to index-check the remaining leaves and anchor.\n',
+    );
+    return;
+  }
 
   process.stdout.write(`publisher: ${report.publisher}\n`);
   process.stdout.write(`jsonlUri: ${report.jsonlUri}\n`);
@@ -423,7 +652,7 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   if (!options.devnet) {
     throw new Error(
-      'Usage: publish-epoch --devnet [--genesis] [--fixture genesis-mini|full] | --verify-only --publisher <addr> --manifest-uri ar://...',
+      'Usage: publish-epoch --devnet [--genesis] [--fixture genesis-mini|full] [--upload-only|--anchor-only|--retry-failed] [--index-check-concurrency=N] [--index-check-delay=MS] [--index-check-timeout=MS] | --verify-only --publisher <addr> --manifest-uri ar://...',
     );
   }
 

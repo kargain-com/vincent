@@ -43,3 +43,30 @@ export const IRYS_UPLOAD_MAX_ATTEMPTS = 5;
 /** Irys data retrieval and ANS-104 tag-query endpoints. */
 export const IRYS_GATEWAY_URL = 'https://gateway.irys.xyz';
 export const IRYS_GRAPHQL_URL = 'https://uploader.irys.xyz/graphql';
+
+/** Default parallel leaf uploads for full seed publishes. */
+export const DEFAULT_FULL_UPLOAD_CONCURRENCY = 10;
+
+/** Pause before GraphQL index verification (bundler catch-up). */
+export const DEFAULT_FULL_INDEX_CHECK_DELAY_MS = 180_000;
+
+/** Parallel GraphQL leaf verifications for full seed publishes. */
+export const DEFAULT_FULL_INDEX_CHECK_CONCURRENCY = 20;
+
+/** Per-leaf GraphQL index timeout for full seed publishes. */
+export const DEFAULT_FULL_INDEX_CHECK_TIMEOUT_MS = 120_000;
+
+/** Index-check log interval for full seed (leaves phase uses 250). */
+export const DEFAULT_FULL_INDEX_CHECK_LOG_INTERVAL = 25;
+
+/** Re-upload attempts when a leaf is missing from GraphQL index. */
+export const DEFAULT_FULL_INDEX_CHECK_MAX_REUPLOADS = 3;
+
+/** Extra re-upload attempts for --anchor-only (leaves already uploaded earlier). */
+export const DEFAULT_ANCHOR_ONLY_INDEX_CHECK_MAX_REUPLOADS = 6;
+
+/** Pause after re-upload before polling GraphQL again (bundler catch-up). */
+export const DEFAULT_POST_REUPLOAD_DELAY_MS = 60_000;
+
+/** Longer post-re-upload pause for --anchor-only on devnet. */
+export const DEFAULT_ANCHOR_ONLY_POST_REUPLOAD_DELAY_MS = 90_000;
