@@ -224,9 +224,13 @@ function createPublishProgressLogger(leafLogInterval: number) {
           return;
         }
         lastLeafLogAt = progress.completed;
+        const resumePart =
+          progress.skipped !== undefined
+            ? `; uploaded ${String(progress.uploaded ?? 0)}, skipped ${String(progress.skipped)}`
+            : '';
         process.stdout.write(
           `Uploading leaves ${String(progress.completed)}/${String(progress.total)} ` +
-            `(${formatProgressPercent(progress.completed, progress.total)})...\n`,
+            `(${formatProgressPercent(progress.completed, progress.total)})${resumePart}...\n`,
         );
         return;
       }
@@ -368,7 +372,8 @@ async function runPublish(options: CliOptions): Promise<void> {
   });
 
   process.stdout.write(
-    `Publishing epoch (${String(built.value.leaves.size)} leaves; sequential Irys uploads may take hours)...\n`,
+    `Publishing epoch (${String(built.value.leaves.size)} leaves; resume enabled; ` +
+      `sequential Irys uploads may take hours)...\n`,
   );
   const report = await publishEpoch({
     epoch: built.value,
@@ -381,6 +386,7 @@ async function runPublish(options: CliOptions): Promise<void> {
       gatewayUrl: irysGatewayUrl,
       graphqlUrl: irysGraphqlUrl,
       timeoutMs: options.fixture === 'full' ? 120_000 : undefined,
+      resumeBeforeUpload: true,
     },
   });
 

@@ -156,7 +156,8 @@ indexed and Merkle-valid (per-leaf timeout; longer for `--full`). If indexing fa
 
 The full seed compiles to **~13,900 leaves**. The founder CLI uploads leaves **sequentially**
 (one Irys transaction per leaf), so a full devnet publish typically runs for **many hours**.
-Progress is logged every 250 leaves. Ensure the publisher wallet holds enough **Base Sepolia
+Progress is logged every 250 leaves. Re-runs **skip leaves** already discoverable via GraphQL
+with a valid Merkle proof against the current epoch root. Ensure the publisher wallet holds enough **Base Sepolia
 ETH** for the quoted Irys upload budget plus `publishEpoch` gas.
 
 ### Re-verify an existing epoch (verify-only)

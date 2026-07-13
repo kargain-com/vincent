@@ -130,6 +130,51 @@ describe('publishEpoch offline mock e2e', () => {
     expect(uploadSpy).not.toHaveBeenCalled();
   });
 
+  it('resumes leaf uploads when leaves are already indexed', async () => {
+    const claims = loadGenesisMiniClaims();
+    const built = compile(claims, {});
+    if (!built.ok) {
+      throw new Error(built.error.message);
+    }
+
+    const seedUploader = createMockUploader();
+    const sortedLeaves = [...built.value.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
+    for (const [leafKey, entry] of sortedLeaves) {
+      await seedUploader.upload(
+        new TextEncoder().encode(
+          JSON.stringify({ leaf: entry.leaf, proof: entry.proof }),
+        ),
+        [
+          { name: 'App', value: 'vincent' },
+          { name: 'Epoch', value: '1' },
+          { name: 'LeafKey', value: leafKey },
+        ],
+      );
+    }
+
+    const gatewayItems = uploaderStoreToGatewayItems(seedUploader.records, TEST_PUBLISHER, 1);
+    const { gatewayUrl, graphqlUrl, fetchImpl } = createMockGateway(gatewayItems);
+
+    const uploader = createMockUploader();
+    const uploadSpy = vi.spyOn(uploader, 'upload');
+    const chainPublisher = createMockChainPublisher();
+
+    await publishEpoch({
+      epoch: built.value,
+      signerKeyHex: TEST_PRIVATE_KEY,
+      uploader,
+      chainPublisher,
+      leafIndexCheck: {
+        gatewayUrl,
+        graphqlUrl,
+        fetchImpl,
+        resumeBeforeUpload: true,
+      },
+    });
+
+    expect(uploadSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('publishGenesis wrapper sets requireGenesis', async () => {
     const claims = loadGenesisMiniClaims();
     const built = compile(claims, {});

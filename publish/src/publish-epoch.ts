@@ -1,4 +1,5 @@
 import type { EpochBuild } from '@kargain/vincent-compiler';
+import { createArweaveGetLeaf } from '@kargain/vincent/arweave';
 import { addressFromPrivateKey, toChecksumAddress } from '@kargain/vincent/protocol';
 import { gzipSync } from 'node:zlib';
 
@@ -13,6 +14,7 @@ import {
 } from './preflight-genesis-publish.js';
 import { resolveEpochParent, type EpochChainReader } from './resolve-epoch-parent.js';
 import { manifestHash, signManifest } from './sign-manifest.js';
+import { isLeafAlreadyUploaded } from './resolve-uploaded-leaf.js';
 import {
   verifyUploadedLeaves,
   type VerifyUploadedLeavesOptions,
@@ -27,6 +29,8 @@ export interface LeafIndexCheckOptions {
   timeoutMs?: number;
   pollIntervalMs?: number;
   sleep?: VerifyUploadedLeavesOptions['sleep'];
+  /** Skip leaf uploads already on Irys when Merkle-valid. Default false. */
+  resumeBeforeUpload?: boolean;
 }
 
 export interface PublishEpochDeps {
@@ -58,6 +62,10 @@ export interface PublishEpochProgress {
   phase: PublishEpochPhase;
   completed: number;
   total: number;
+  /** Leaves skipped during resume (phase leaves only). */
+  skipped?: number;
+  /** Leaves uploaded during this run (phase leaves only). */
+  uploaded?: number;
 }
 
 function utf8Bytes(value: string): Uint8Array {
@@ -102,19 +110,53 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
 
   const sortedLeaves = [...deps.epoch.leaves.entries()].sort(([a], [b]) => a.localeCompare(b));
   const leafTotal = sortedLeaves.length;
-  deps.onProgress?.({ phase: 'leaves', completed: 0, total: leafTotal });
+  const indexCheck = deps.leafIndexCheck;
+  const resumeLeaves = indexCheck?.resumeBeforeUpload === true;
+  const getLeaf =
+    resumeLeaves && indexCheck !== undefined
+      ? createArweaveGetLeaf({
+          gatewayUrl: indexCheck.gatewayUrl,
+          graphqlUrl: indexCheck.graphqlUrl,
+          publisher: publisher.toLowerCase(),
+          epoch: epochNumber,
+          fetchImpl: indexCheck.fetchImpl,
+        })
+      : undefined;
+
+  let skippedLeaves = 0;
+  let uploadedLeaves = 0;
+  deps.onProgress?.({
+    phase: 'leaves',
+    completed: 0,
+    total: leafTotal,
+    skipped: 0,
+    uploaded: 0,
+  });
 
   for (let index = 0; index < sortedLeaves.length; index++) {
     const [leafKey, entry] = sortedLeaves[index]!;
-    await deps.uploader.upload(utf8Bytes(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })), [
-      appTag(),
-      epochTag(epochNumber),
-      { name: 'LeafKey', value: leafKey },
-    ]);
+    const alreadyUploaded =
+      getLeaf !== undefined
+        ? await isLeafAlreadyUploaded(getLeaf, leafKey, deps.epoch.merkleRoot)
+        : false;
+
+    if (!alreadyUploaded) {
+      await deps.uploader.upload(utf8Bytes(JSON.stringify({ leaf: entry.leaf, proof: entry.proof })), [
+        appTag(),
+        epochTag(epochNumber),
+        { name: 'LeafKey', value: leafKey },
+      ]);
+      uploadedLeaves += 1;
+    } else {
+      skippedLeaves += 1;
+    }
+
     deps.onProgress?.({
       phase: 'leaves',
       completed: index + 1,
       total: leafTotal,
+      skipped: skippedLeaves,
+      uploaded: uploadedLeaves,
     });
   }
 
