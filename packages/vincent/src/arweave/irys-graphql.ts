@@ -108,6 +108,35 @@ export function buildEpochTransactionQuery(options: {
 }`;
 }
 
+export function buildLeafUriSidecarTransactionQuery(options: {
+  publisher: string;
+  epoch: number;
+  orderArgument: GraphqlOrderArgument;
+  first?: number;
+}): string {
+  const owners = JSON.stringify([normalizePublisherAddress(options.publisher)]);
+  const epochValue = JSON.stringify(String(options.epoch));
+  const first = options.first ?? 1;
+  return `query {
+  transactions(
+    owners: ${owners}
+    tags: [
+      { name: "App", values: ["vincent"] }
+      { name: "Epoch", values: [${epochValue}] }
+      { name: "Kind", values: ["leaf-uris"] }
+    ]
+    ${options.orderArgument}
+    first: ${String(first)}
+  ) {
+    edges {
+      node {
+        id
+      }
+    }
+  }
+}`;
+}
+
 export function sortArgumentUnsupported(payload: GraphqlTransactionsResponse): boolean {
   return payload.errors?.some((error) => error.message?.includes('Unknown argument "sort"')) === true;
 }

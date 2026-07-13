@@ -17,6 +17,22 @@ export {
   type BackfillLeafUrisResult,
 } from './backfill-leaf-uris.js';
 export {
+  buildLeafUriSidecar,
+  discoverLeafUriSidecar,
+  fetchLeafUriSidecar,
+  LEAF_URI_SIDECAR_KIND,
+  LEAF_URI_SIDECAR_SCHEMA_VERSION,
+  parseLeafUriSidecar,
+  resolveVerifierLeafUris,
+  serializeLeafUriSidecar,
+  validateLeafUriSidecar,
+  type DiscoverLeafUriSidecarOptions,
+  type DiscoverLeafUriSidecarResult,
+  type FetchLeafUriSidecarOptions,
+  type LeafUriSidecar,
+  type LeafUriSidecarFingerprint,
+} from './leaf-uri-sidecar.js';
+export {
   leafTxIdToUri,
   resolveLeafTxId,
   type ResolveLeafTxIdOptions,

@@ -14,6 +14,8 @@ export default defineConfig({
         'src/wmi-extended.generated.ts',
         // Vendored third-party inflate (tiny-inflate); validated via lookupWmi integration
         'src/inflate.vendored.ts',
+        // Duplicate of protocol/canonicalize for arweave isolation boundary
+        'src/arweave/canonicalize-json.ts',
       ],
       thresholds: {
         statements: 100,

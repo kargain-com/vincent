@@ -12,6 +12,10 @@ describe('arweave entry re-exports', () => {
     expect(typeof arweaveEntry.createArweaveGetLeafWithUris).toBe('function');
     expect(typeof arweaveEntry.fetchLeafFromGateway).toBe('function');
     expect(typeof arweaveEntry.verifyLeafFromGateway).toBe('function');
+    expect(typeof arweaveEntry.buildLeafUriSidecar).toBe('function');
+    expect(typeof arweaveEntry.discoverLeafUriSidecar).toBe('function');
+    expect(typeof arweaveEntry.fetchLeafUriSidecar).toBe('function');
+    expect(typeof arweaveEntry.resolveVerifierLeafUris).toBe('function');
     expect(arweaveEntry.LeafNotFoundError).toBe(arweaveModule.LeafNotFoundError);
     expect(arweaveEntry.createArweaveGetLeaf).toBe(arweaveModule.createArweaveGetLeaf);
     expect(arweaveEntry.resolveLeafTxId).toBe(arweaveModule.resolveLeafTxId);
