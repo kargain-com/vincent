@@ -183,7 +183,7 @@ Irys uses three different endpoints:
 
 Registry: `0x06667DB3795C70F34b7517D1Af1217D3167BE241` on Base Sepolia (84532).
 
-**Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step. See [docs/MAINNET_READINESS.md](docs/MAINNET_READINESS.md) for the P0/P1/P2 checklist and dual-network status.
+**Devnet caveat:** Irys devnet uploads are for validation only. Mainnet genesis is a separate later step (founder ops; dual-network CLI already accepts `--network base`).
 
 Before uploading, the CLI compiles claims, quotes the full Irys upload cost (every leaf +
 JSONL + manifest via `estimateFolderPrice`), funds the Irys account from **Base Sepolia**

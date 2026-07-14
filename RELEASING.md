@@ -7,7 +7,7 @@ This document is the founder runbook for publishing `@kargain/vincent` to npm. P
 - Node.js 24+ and pnpm 11 (via Corepack)
 - npm account with publish access to the `@kargain` scope
 - All CI checks green on the release commit (`pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm validate:full-sim`)
-- **Explicit founder approval** for the target npm version (see `.cursor/rules/npm-version-publish.mdc`). Do not bump `packages/vincent/package.json` version or CHANGELOG release headers without that approval.
+- **Explicit founder approval** for the target npm version. Do not bump `packages/vincent/package.json` version or CHANGELOG release headers without that approval.
 
 ## Version policy
 

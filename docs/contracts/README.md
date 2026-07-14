@@ -8,9 +8,10 @@ Immutable, ownerless, permissionless, append-only per-publisher epoch notary. Re
 
 | Chain | Chain ID | Contract | Address | Verified |
 |-------|----------|----------|---------|----------|
-| Base Sepolia | 84532 | VincentAnchorRegistry | [`0x06667DB3795C70F34b7517D1Af1217D3167BE241`](https://sepolia.basescan.org/address/0x06667DB3795C70F34b7517D1Af1217D3167BE241) | Pending deploy |
+| Base Sepolia | 84532 | VincentAnchorRegistry | [`0x06667DB3795C70F34b7517D1Af1217D3167BE241`](https://sepolia.basescan.org/address/0x06667DB3795C70F34b7517D1Af1217D3167BE241) | Deployed · Exact Match (2026-07-14) |
+| Base | 8453 | VincentAnchorRegistry | [`0x06667DB3795C70F34b7517D1Af1217D3167BE241`](https://basescan.org/address/0x06667DB3795C70F34b7517D1Af1217D3167BE241) | Not deployed |
 
-> **Note:** The address above is precomputed via CREATE2 and is the same on every EVM chain once deployed with the canonical factory, salt, and bytecode. Update the **Verified** column after founder deploy + verify on Base Sepolia.
+> **Note:** The address is precomputed via CREATE2 and is the same on every EVM chain once deployed with the canonical factory, salt, and bytecode. Sepolia: bytecode live; Basescan Exact Match; test publisher `0xcf1eb0e7ed453ed266bf90e7c09e0e4769580b77` has `epochCount = 2` (index 1 = full US seed root `0xbb435fb8…`). Update this table after mainnet deploy + verify.
 
 ### Reading epochs (client library)
 

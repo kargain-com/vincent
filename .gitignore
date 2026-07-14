@@ -14,6 +14,12 @@ contracts/coverage/
 
 # Local maintainer notes (never committed / never published)
 *.local.md
+docs/HANDOFF.md
+docs/SESSION.md
+publish/docs/MAINNET_READINESS.md
+
+# Editor / agent tooling (local only — never commit)
+.cursor/
 
 # Publish resume checkpoint (local state only)
 publish/.vincent-publish-checkpoint.json

@@ -7,6 +7,10 @@
 | [GOVERNANCE.md](GOVERNANCE.md) | Published | Governance model and decentralization roadmap |
 | [contracts/](contracts/) | Published | On-chain VincentAnchorRegistry address table |
 
+Local maintainer memory (`HANDOFF.md`, `SESSION.md`, and
+`publish/docs/MAINNET_READINESS.md`) is **gitignored** — create/update on the
+machine only; never commit.
+
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose changes to these documents.
 
 ## Library
@@ -32,7 +36,7 @@ See the [package README](../packages/vincent/README.md) for quick start, full de
 |---------|--------|
 | `@kargain/vincent-compiler` | [compiler/README.md](../compiler/README.md) |
 | `@kargain/vincent-pipeline` | [pipeline/README.md](../pipeline/README.md) |
-| `@kargain/vincent-publish` | [publish/README.md](../publish/README.md) — [mainnet readiness](../publish/docs/MAINNET_READINESS.md) |
+| `@kargain/vincent-publish` | [publish/README.md](../publish/README.md) |
 | `@kargain/vincent-contracts` | [contracts/README.md](../contracts/README.md) |
 
 Release process: [RELEASING.md](../RELEASING.md).
