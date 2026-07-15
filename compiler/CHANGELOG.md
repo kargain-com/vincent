@@ -1,5 +1,11 @@
 # @kargain/vincent-compiler
 
+## 0.1.0
+
+### Minor Changes
+
+- First public npm release. Distribution change only — no API or behavior changes. Published so independent verifiers can byte-rebuild epochs (`verifyEpoch`, the §6 `rebuilt = true` check) and publishers can compile epochs without cloning the repository. Runtime VIN decoding still only requires `@kargain/vincent`.
+
 ## 0.0.2
 
 ### Patch Changes

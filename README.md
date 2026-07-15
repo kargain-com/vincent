@@ -23,7 +23,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code rules, and ho
 | Package | Description |
 |---------|-------------|
 | [`@kargain/vincent`](packages/vincent) | Published library — core (`.`), WMI (`./wmi`), protocol (`./protocol`), decoder (`./decoder`), Arweave leaf fetch (`./arweave`), on-chain epoch reader (`./anchor`, optional `viem` peer) |
-| [`@kargain/vincent-compiler`](compiler) | Private epoch compiler (workspace only) |
+| [`@kargain/vincent-compiler`](compiler) | Published epoch compiler — compile claim sets and byte-rebuild epochs for independent verification (`rebuilt = true`) |
 | [`@kargain/vincent-pipeline`](pipeline) | Private WMI data generator (workspace only) |
 | [`@kargain/vincent-publish`](publish) | Private genesis publish tooling (workspace only) |
 | [`@kargain/vincent-contracts`](contracts) | Private on-chain registry (Hardhat 3, workspace only) |
@@ -36,7 +36,7 @@ See the [package README](packages/vincent/README.md) for entry points, API table
 |-------|-------|--------|
 | R | Repository skeleton and protocol specification | Done |
 | V | Deterministic VIN layer and client-side decoder | Shipped (core, WMI, decoder, arweave, anchor) |
-| P | Attestations, manifests, and epoch compiler | Shipped (protocol module, private compiler) |
+| P | Attestations, manifests, and epoch compiler | Shipped (protocol module, published compiler) |
 | A | Arweave storage and EVM anchoring | In progress (client libs shipped; registry deploy + genesis publish tooling in repo) |
 
 ## License

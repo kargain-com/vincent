@@ -1,9 +1,35 @@
 {
   "name": "@kargain/vincent-compiler",
-  "version": "0.0.2",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Epoch compiler for the Vincent protocol: canonical JSONL, per-WMI Merkle leaves, and the rebuilt=true epoch verification check.",
+  "keywords": [
+    "vin",
+    "vincent",
+    "merkle",
+    "epoch",
+    "verifier"
+  ],
   "type": "module",
+  "sideEffects": false,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kargain-com/vincent.git",
+    "directory": "compiler"
+  },
+  "homepage": "https://github.com/kargain-com/vincent#readme",
+  "bugs": "https://github.com/kargain-com/vincent/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -11,12 +37,12 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@kargain/vincent": "workspace:*"
+    "@kargain/vincent": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",

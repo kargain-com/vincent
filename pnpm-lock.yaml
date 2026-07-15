@@ -63,7 +63,7 @@ importers:
   compiler:
     dependencies:
       '@kargain/vincent':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../packages/vincent
     devDependencies:
       '@types/node':

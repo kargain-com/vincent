@@ -1,6 +1,6 @@
 # @kargain/vincent-compiler
 
-Private epoch compiler for the Vincent protocol (P-3). Accepts an accepted claim set and produces:
+Epoch compiler for the Vincent protocol (P-3). Accepts an accepted claim set and produces:
 
 - **Canonical JSONL** — normative, byte-reproducible artifact (JCS, sorted per PROTOCOL.md §7)
 - **Per-WMI leaves** — self-contained JSON bundles (bindings + inlined schema patterns), content-addressed
@@ -19,7 +19,30 @@ This tool does **not** parse vPIC, fetch network data, or use production signing
 | `fixtures/genesis-mini/` | Committed test claims + manifest + golden hashes + leaf files |
 | `fixtures/merkle-rfc6962.json` | Committed Merkle scheme test vectors |
 
-**Why private:** The compiler is a build-time tool (like `pipeline/`), not a runtime library dependency. Consumers verify epochs via manifest hashes; they do not need this package on npm.
+## Who needs this
+
+- **Publishers** compile an accepted claim set into a byte-reproducible epoch (JSONL + leaves + Merkle root) before signing and anchoring the manifest.
+- **Verifiers / confirmers** rebuild a published epoch from its claim set and check it byte-for-byte against the manifest — the §6 `rebuilt = true` check behind independent post-publication confirmations.
+- **Runtime consumers do not need this package.** VIN decoding only requires `@kargain/vincent` (`./anchor`, `./arweave`, `./decoder`); clients verify Merkle proofs against the anchored root, they never compile claims.
+
+```bash
+npm install @kargain/vincent-compiler
+```
+
+Confirm an epoch:
+
+```typescript
+import { verifyEpoch } from '@kargain/vincent-compiler';
+
+// manifest: the signed epoch manifest (e.g. fetched from its ar:// URI)
+// claims:   the claim set the epoch was compiled from
+const result = verifyEpoch(manifest, claims);
+if (result.ok) {
+  // signature valid + rebuilt jsonlSha256 and merkleRoot match manifest.dataset
+} else {
+  console.error(result.reason);
+}
+```
 
 ## API
 
@@ -81,4 +104,4 @@ Compiled epochs are consumed at runtime by `@kargain/vincent` (published npm pac
 2. **`@kargain/vincent/arweave`** — reference `getLeaf(wmi)` via ANS-104 tags (injectable)
 3. **`@kargain/vincent/decoder`** — Merkle-verify each leaf and decode VIN attributes
 
-This compiler package stays private; consumers verify manifest hashes and Merkle roots, not compile claims themselves.
+Runtime consumers verify manifest hashes and Merkle roots; they do not compile claims themselves. This package is for publishers and verifiers rebuilding epochs.

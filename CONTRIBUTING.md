@@ -22,7 +22,7 @@ All four commands must pass before you open a pull request. CI runs the same che
 | Path | Purpose |
 |------|---------|
 | `packages/vincent` | `@kargain/vincent` — published library (`.`, `./wmi`, `./protocol`, `./decoder`, `./arweave`, `./anchor`) |
-| `compiler/` | `@kargain/vincent-compiler` — private epoch compiler (workspace only) |
+| `compiler/` | `@kargain/vincent-compiler` — published epoch compiler (publisher / verifier tool) |
 | `pipeline/` | `@kargain/vincent-pipeline` — private WMI / seed generator (workspace only) |
 | `publish/` | `@kargain/vincent-publish` — private genesis publish tooling (workspace only) |
 | `docs/` | Normative protocol specification and governance documents |
