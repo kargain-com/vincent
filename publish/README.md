@@ -18,6 +18,29 @@ The append-only per-publisher epoch chain serves two roles (see [PROTOCOL §8.1]
 
 Foundational genesis is one epoch per address, keyless and frozen. Overlay publishers reuse the same wallet for dataset updates via incremental epochs linked by `parentRoot`.
 
+## Community epochs (`publish:community`)
+
+Individual verifiers publish community epochs on their **own** chain: verified
+base epoch (fetched from the registry + gateway, never a local build artifact)
+plus endorsed community claims, full snapshot, attestation archive uploaded as
+a non-normative `Kind=review-archive` sidecar, §4.8 jitter window persisted in
+the checkpoint. Runbook: [docs/PUBLISHER.md](../docs/PUBLISHER.md); canon
+profile: [docs/COMMUNITY-CANON.md](../docs/COMMUNITY-CANON.md).
+
+```bash
+pnpm --filter @kargain/vincent-publish publish:community -- \
+  --network base-sepolia \
+  --claims accepted-community-claims.jsonl \
+  --archive attestation-archive.json \
+  --base 0xBasePublisher...:0 \
+  --jitter-days 7
+```
+
+Env: `VINCENT_PUBLISHER_PRIVATE_KEY` (dedicated key, never the genesis key) +
+the network RPC var. Checkpoint default: `.vincent-community-checkpoint.json`.
+Programmatic: `publishCommunityEpoch`, `fetchBaseEpoch`, `parseReviewArchive`,
+`assembleCommunityEpoch` from the package root (network via injected adapters).
+
 ## Manifest shape (genesis / large epochs)
 
 - `parent`: always present — `null` for genesis (epoch 1); for later epochs, the prior

@@ -24,4 +24,6 @@ publish/docs/MAINNET_READINESS.md
 # Publish resume checkpoint (local state only)
 publish/.vincent-publish-checkpoint.json
 publish/.vincent-publish-checkpoint.json.tmp
+publish/.vincent-community-checkpoint.json
+publish/.vincent-community-checkpoint.json.tmp
 publish/leaf-uris-epoch-*.json

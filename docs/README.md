@@ -5,6 +5,8 @@
 | [PROTOCOL.md](PROTOCOL.md) | Published (v1.2) | Normative protocol specification |
 | [SEED.md](SEED.md) | Published | Genesis seed corpus overview |
 | [GOVERNANCE.md](GOVERNANCE.md) | Published | Governance model and decentralization roadmap |
+| [PUBLISHER.md](PUBLISHER.md) | Published (non-normative) | Individual community-publisher runbook (`publish:community`) |
+| [COMMUNITY-CANON.md](COMMUNITY-CANON.md) | Published (non-normative) | Community canon client profile: acceptance bar, review-archive sidecar, confirmer flow |
 | [contracts/](contracts/) | Published | On-chain VincentAnchorRegistry address table |
 
 Local maintainer memory (`HANDOFF.md`, `SESSION.md`, and

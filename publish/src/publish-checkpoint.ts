@@ -19,6 +19,10 @@ export interface PublishCheckpoint {
   leafUris: Record<string, string>;
   /** ar:// URI of published Kind=leaf-uris bulk index (optional). */
   leafUriSidecarUri?: string;
+  /** ar:// URI of the uploaded Kind=review-archive sidecar (community epochs). */
+  reviewArchiveUri?: string;
+  /** ISO timestamp before which uploads/anchor refuse to run (§4.8 jitter window). */
+  publishNotBefore?: string;
   jsonlUri?: string;
   manifestUri?: string;
   updatedAt: string;
@@ -142,6 +146,12 @@ function parseCheckpoint(value: unknown): PublishCheckpoint {
   if (typeof record.manifestUri === 'string') checkpoint.manifestUri = record.manifestUri;
   if (typeof record.leafUriSidecarUri === 'string') {
     checkpoint.leafUriSidecarUri = record.leafUriSidecarUri;
+  }
+  if (typeof record.reviewArchiveUri === 'string') {
+    checkpoint.reviewArchiveUri = record.reviewArchiveUri;
+  }
+  if (typeof record.publishNotBefore === 'string') {
+    checkpoint.publishNotBefore = record.publishNotBefore;
   }
   return checkpoint;
 }
@@ -291,6 +301,28 @@ export function setLeafUriSidecarUri(
   uri: string,
 ): PublishCheckpoint {
   return updateCheckpointUris(checkpoint, { leafUriSidecarUri: uri });
+}
+
+export function setReviewArchiveUri(
+  checkpoint: PublishCheckpoint,
+  uri: string,
+): PublishCheckpoint {
+  return {
+    ...checkpoint,
+    reviewArchiveUri: uri,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function setPublishNotBefore(
+  checkpoint: PublishCheckpoint,
+  isoTimestamp: string,
+): PublishCheckpoint {
+  return {
+    ...checkpoint,
+    publishNotBefore: isoTimestamp,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export function needsLeafUriBackfillHint(checkpoint: PublishCheckpoint): boolean {

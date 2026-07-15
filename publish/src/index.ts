@@ -19,6 +19,29 @@ export {
 export { buildManifest } from './build-manifest.js';
 export { backfillLeafUrisFromGraphql } from './backfill-leaf-uris.js';
 export {
+  assembleCommunityEpoch,
+  DEFAULT_COMMUNITY_CHECKPOINT_PATH,
+  parseCommunityClaims,
+  publishCommunityEpoch,
+  REVIEW_ARCHIVE_KIND,
+  type AssembleCommunityEpochInput,
+  type AssembledCommunityEpoch,
+  type CommunityJitterOptions,
+  type PublishCommunityEpochDeps,
+  type PublishCommunityEpochResult,
+} from './community-epoch.js';
+export {
+  fetchBaseEpoch,
+  parseBaseClaims,
+  type BaseEpoch,
+  type BaseEpochReader,
+  type FetchBaseEpochOptions,
+} from './fetch-base-epoch.js';
+export {
+  parseReviewArchive,
+  type ReviewArchiveSummary,
+} from './parse-review-archive.js';
+export {
   buildLeafUriSidecar,
   buildLeafUriSidecarFromCheckpoint,
   discoverLeafUriSidecar,
@@ -82,6 +105,8 @@ export {
   saveCheckpoint,
   setLeafUri,
   setLeafUriSidecarUri,
+  setPublishNotBefore,
+  setReviewArchiveUri,
   updateCheckpointUris,
   uploadedLeafKeySet,
   validateCheckpointFingerprint,

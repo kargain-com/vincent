@@ -1,5 +1,9 @@
 import type { EpochBuild } from '@kargain/vincent-compiler';
-import { addressFromPrivateKey, toChecksumAddress } from '@kargain/vincent/protocol';
+import {
+  addressFromPrivateKey,
+  toChecksumAddress,
+  type ReviewPolicy,
+} from '@kargain/vincent/protocol';
 import { gzipSync } from 'node:zlib';
 
 import type { ChainPublisher, PublishGenesisReport, UploadTag, Uploader } from './adapters/types.js';
@@ -74,6 +78,8 @@ export interface PublishEpochDeps {
   uploader: Uploader;
   chainPublisher: ChainPublisher & EpochChainReader;
   compiler?: { name: string; version: string };
+  /** Manifest reviewPolicy override; defaults to `{ minAccepts: 1, reviewers: [publisher] }`. */
+  reviewPolicy?: ReviewPolicy;
   requireGenesis?: boolean;
   preflight?: EpochPreflightOptions;
   leafIndexCheck?: LeafIndexCheckOptions;
@@ -329,6 +335,11 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
     checkpoint = result.checkpoint;
   }
 
+  const reviewPolicy: ReviewPolicy = deps.reviewPolicy ?? {
+    minAccepts: DEFAULT_GENESIS_REVIEW_POLICY.minAccepts,
+    reviewers: [publisher],
+  };
+
   let jsonlUri = checkpoint.jsonlUri;
   let manifestUri = checkpoint.manifestUri;
   let signed = signManifest(
@@ -339,10 +350,7 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
       jsonlSha256: deps.epoch.jsonlSha256,
       uris: [jsonlUri ?? 'ar://pending'],
       compiler,
-      reviewPolicy: {
-        minAccepts: DEFAULT_GENESIS_REVIEW_POLICY.minAccepts,
-        reviewers: [publisher],
-      },
+      reviewPolicy,
     }),
     deps.signerKeyHex,
   );
@@ -367,10 +375,7 @@ export async function publishEpoch(deps: PublishEpochDeps): Promise<PublishEpoch
       jsonlSha256: deps.epoch.jsonlSha256,
       uris: [jsonlUri],
       compiler,
-      reviewPolicy: {
-        minAccepts: DEFAULT_GENESIS_REVIEW_POLICY.minAccepts,
-        reviewers: [publisher],
-      },
+      reviewPolicy,
     });
     signed = signManifest(unsigned, deps.signerKeyHex);
     hash = manifestHash(signed);

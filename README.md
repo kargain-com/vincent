@@ -25,7 +25,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code rules, and ho
 | [`@kargain/vincent`](packages/vincent) | Published library — core (`.`), WMI (`./wmi`), protocol (`./protocol`), decoder (`./decoder`), Arweave leaf fetch (`./arweave`), on-chain epoch reader (`./anchor`, optional `viem` peer) |
 | [`@kargain/vincent-compiler`](compiler) | Published epoch compiler — compile claim sets and byte-rebuild epochs for independent verification (`rebuilt = true`) |
 | [`@kargain/vincent-pipeline`](pipeline) | Private WMI data generator (workspace only) |
-| [`@kargain/vincent-publish`](publish) | Private genesis publish tooling (workspace only) |
+| [`@kargain/vincent-publish`](publish) | Private publish tooling — foundational genesis and individual community epochs (workspace only) |
 | [`@kargain/vincent-contracts`](contracts) | Private on-chain registry (Hardhat 3, workspace only) |
 
 See the [package README](packages/vincent/README.md) for entry points, API tables, and usage examples.
